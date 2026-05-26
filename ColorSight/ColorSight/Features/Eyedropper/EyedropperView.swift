@@ -1,11 +1,14 @@
 import SwiftUI
+import SwiftData
 import PhotosUI
 
 // MARK: - Root view
 
 struct EyedropperView: View {
 
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss)      private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
     @State private var viewModel     = EyedropperViewModel()
     @State private var pickerItem:   PhotosPickerItem?
     @State private var isDragging    = false
@@ -126,6 +129,10 @@ struct EyedropperView: View {
                         }
                         // Announce the final color once the user lifts their finger.
                         viewModel.announceCurrentColor()
+                        // Save to history.
+                        if let color = viewModel.identifiedColor {
+                            modelContext.insert(ColorSwatch(from: color, source: "eyedropper"))
+                        }
                     }
             )
         }

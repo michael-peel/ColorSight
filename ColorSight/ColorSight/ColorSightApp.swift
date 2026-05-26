@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct ColorSightApp: App {
@@ -13,5 +14,6 @@ struct ColorSightApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: ColorSwatch.self)
     }
 }

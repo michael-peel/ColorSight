@@ -1,10 +1,14 @@
 import SwiftUI
+import SwiftData
 
 struct CameraView: View {
+
+    @Environment(\.modelContext) private var modelContext
 
     @State private var viewModel         = CameraViewModel()
     @State private var showingSettings   = false
     @State private var showingEyedropper = false
+    @State private var showingHistory    = false
     @State private var isRefocusing      = false
     @State private var pressWorkItem:    DispatchWorkItem? = nil
 
@@ -68,16 +72,29 @@ struct CameraView: View {
 
                     Spacer()
 
-                    // Settings button — top-right
-                    Button {
-                        showingSettings = true
-                    } label: {
-                        Image(systemName: "gearshape.fill")
-                            .font(.title3)
-                            .foregroundStyle(.white)
-                            .padding(10)
-                            .background(.ultraThinMaterial, in: Circle())
-                            .shadow(color: .black.opacity(0.3), radius: 4)
+                    // History + Settings — top-right
+                    HStack(spacing: 10) {
+                        Button {
+                            showingHistory = true
+                        } label: {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.title3)
+                                .foregroundStyle(.white)
+                                .padding(10)
+                                .background(.ultraThinMaterial, in: Circle())
+                                .shadow(color: .black.opacity(0.3), radius: 4)
+                        }
+
+                        Button {
+                            showingSettings = true
+                        } label: {
+                            Image(systemName: "gearshape.fill")
+                                .font(.title3)
+                                .foregroundStyle(.white)
+                                .padding(10)
+                                .background(.ultraThinMaterial, in: Circle())
+                                .shadow(color: .black.opacity(0.3), radius: 4)
+                        }
                     }
                     .padding(.trailing, 16)
                 }
@@ -135,8 +152,16 @@ struct CameraView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
+        .sheet(isPresented: $showingHistory) {
+            HistoryView()
+        }
         .fullScreenCover(isPresented: $showingEyedropper) {
             EyedropperView()
+        }
+        // Save to history whenever the user freezes the camera on a color.
+        .onChange(of: viewModel.isFrozen) { _, frozen in
+            guard frozen, let color = viewModel.identifiedColor else { return }
+            modelContext.insert(ColorSwatch(from: color, source: "camera"))
         }
         .onAppear  { viewModel.startSession() }
         .onDisappear { viewModel.stopSession() }
