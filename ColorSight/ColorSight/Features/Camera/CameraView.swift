@@ -99,16 +99,22 @@ struct CameraView: View {
             }
         }
         .ignoresSafeArea()   // ← ZStack fills full screen; crosshair at true center
+        // Long press gets high priority so SwiftUI doesn't let the tap gesture
+        // consume the touch first. When the minimum duration is NOT met (quick tap)
+        // the long press fails and the tap fires normally — no conflict.
+        .highPriorityGesture(
+            LongPressGesture(minimumDuration: 0.45)
+                .onEnded { _ in
+                    viewModel.refocus()
+                    withAnimation(.easeIn(duration: 0.15))  { isRefocusing = true  }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        withAnimation(.easeOut(duration: 0.3)) { isRefocusing = false }
+                    }
+                }
+        )
         .onTapGesture {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                 viewModel.isFrozen.toggle()
-            }
-        }
-        .onLongPressGesture(minimumDuration: 0.45) {
-            viewModel.refocus()
-            withAnimation(.easeIn(duration: 0.15))  { isRefocusing = true  }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                withAnimation(.easeOut(duration: 0.3)) { isRefocusing = false }
             }
         }
         .sheet(isPresented: $showingSettings) {
