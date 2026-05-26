@@ -11,7 +11,7 @@ struct CameraView: View {
                 .ignoresSafeArea()
 
             // MARK: - Center crosshair
-            CrosshairView()
+            CrosshairView(isFrozen: viewModel.isFrozen)
 
             // MARK: - Bottom HUD
             VStack {
@@ -21,7 +21,7 @@ struct CameraView: View {
                     .padding(.bottom, 40)
             }
 
-            // MARK: - Error banner (if any)
+            // MARK: - Error banner
             if let error = viewModel.errorMessage {
                 VStack {
                     Text(error)
@@ -35,7 +35,12 @@ struct CameraView: View {
                 }
             }
         }
-        .onAppear { viewModel.startSession() }
+        .onTapGesture {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                viewModel.isFrozen.toggle()
+            }
+        }
+        .onAppear  { viewModel.startSession() }
         .onDisappear { viewModel.stopSession() }
     }
 
@@ -59,14 +64,12 @@ struct CameraView: View {
 
                 // Text info
                 VStack(alignment: .leading, spacing: 4) {
-                    // Primary: plain English ("Dark Blue")
                     Text(color.simpleName)
                         .font(.title2.bold())
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
 
-                    // Secondary: specific name ("Midnight Blue")
                     if color.name != color.simpleName {
                         Text(color.name)
                             .font(.subheadline)
@@ -88,17 +91,32 @@ struct CameraView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Frozen badge
+                if viewModel.isFrozen {
+                    Image(systemName: "lock.fill")
+                        .font(.callout)
+                        .foregroundStyle(.white.opacity(0.8))
+                        .padding(.trailing, 14)
+                        .transition(.scale.combined(with: .opacity))
+                }
             }
             .frame(height: 100)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(
+                        viewModel.isFrozen ? Color.accentColor.opacity(0.6) : Color.clear,
+                        lineWidth: 1.5
+                    )
+            )
             .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
             .animation(.easeInOut(duration: 0.15), value: color.hex)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: viewModel.isFrozen)
 
         } else {
-            // Placeholder while waiting for first frame
             HStack {
-                ProgressView()
-                    .tint(.white)
+                ProgressView().tint(.white)
                 Text("Identifying color…")
                     .font(.body)
                     .foregroundStyle(.white)
@@ -113,36 +131,36 @@ struct CameraView: View {
 // MARK: - Crosshair
 
 private struct CrosshairView: View {
+    var isFrozen: Bool
 
     var body: some View {
         ZStack {
-            // Outer ring
+            // Ring — accent-colored when frozen
             Circle()
-                .strokeBorder(.white, lineWidth: 2)
-                .frame(width: 40, height: 40)
+                .strokeBorder(
+                    isFrozen ? Color.accentColor : .white,
+                    lineWidth: isFrozen ? 2.5 : 2
+                )
+                .frame(width: 44, height: 44)
                 .shadow(color: .black.opacity(0.4), radius: 3)
 
-            // Horizontal tick
-            Rectangle()
-                .fill(.white)
-                .frame(width: 12, height: 1.5)
-                .offset(x: -26)
-
-            Rectangle()
-                .fill(.white)
-                .frame(width: 12, height: 1.5)
-                .offset(x: 26)
-
-            // Vertical tick
-            Rectangle()
-                .fill(.white)
-                .frame(width: 1.5, height: 12)
-                .offset(y: -26)
-
-            Rectangle()
-                .fill(.white)
-                .frame(width: 1.5, height: 12)
-                .offset(y: 26)
+            if isFrozen {
+                // Lock icon in the center
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.5), radius: 2)
+                    .transition(.scale.combined(with: .opacity))
+            } else {
+                // Normal tick marks
+                Group {
+                    Rectangle().fill(.white).frame(width: 12, height: 1.5).offset(x: -28)
+                    Rectangle().fill(.white).frame(width: 12, height: 1.5).offset(x: 28)
+                    Rectangle().fill(.white).frame(width: 1.5, height: 12).offset(y: -28)
+                    Rectangle().fill(.white).frame(width: 1.5, height: 12).offset(y: 28)
+                }
+                .transition(.opacity)
+            }
         }
         .shadow(color: .black.opacity(0.3), radius: 2)
     }

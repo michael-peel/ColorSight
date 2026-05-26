@@ -29,6 +29,7 @@ final class CameraViewModel: NSObject {
     // MARK: - UI state
 
     var identifiedColor: IdentifiedColor?
+    var isFrozen       = false
     var sessionIsRunning = false
     var errorMessage: String?
 
@@ -136,10 +137,9 @@ extension CameraViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
         let b = pixel[0], g = pixel[1], r = pixel[2]
 
         // ColorEngine.identify() is ~10µs — fast enough to run on MainActor.
-        // Running it here (rather than on sampleQueue) avoids needing nonisolated
-        // on identify() and all its private helpers.
+        // Skip the update when frozen so the card holds its last value.
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+            guard let self, !self.isFrozen else { return }
             self.identifiedColor = self.colorEngine.identify(r: r, g: g, b: b)
         }
     }
