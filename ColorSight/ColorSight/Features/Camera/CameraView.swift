@@ -13,7 +13,12 @@ struct CameraView: View {
                 .ignoresSafeArea()
 
             // MARK: - Center crosshair
-            CrosshairView(isFrozen: viewModel.isFrozen)
+            // Anchored to a full-screen clear layer (ignoring safe areas) so the
+            // crosshair center matches the camera's sampled pixel — which is the
+            // geometric center of the full pixel buffer, not the safe-area center.
+            Color.clear
+                .ignoresSafeArea()
+                .overlay(CrosshairView(isFrozen: viewModel.isFrozen))
 
             // MARK: - Bottom HUD
             VStack {
