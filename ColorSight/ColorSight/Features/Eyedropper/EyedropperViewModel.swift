@@ -44,6 +44,15 @@ final class EyedropperViewModel {
         guard let (r, g, b) = image.pixelColor(atNormalized: point) else { return }
         identifiedColor = colorEngine.identify(r: r, g: g, b: b)
     }
+
+    /// Called when the user lifts their finger after dragging the loupe.
+    /// Fires haptics and/or speaks the current color name per the user's preferences.
+    func announceCurrentColor() {
+        guard let color = identifiedColor else { return }
+        let haptics = UserDefaults.standard.object(forKey: "hapticsEnabled")      as? Bool ?? true
+        let voice   = UserDefaults.standard.object(forKey: "voiceFeedbackEnabled") as? Bool ?? true
+        AccessibilityService.shared.announceColor(color, haptics: haptics, voice: voice)
+    }
 }
 
 // MARK: - UIImage helpers

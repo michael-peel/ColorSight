@@ -30,7 +30,16 @@ final class CameraViewModel: NSObject {
     // MARK: - UI state
 
     var identifiedColor: IdentifiedColor?
-    var isFrozen       = false
+    var isFrozen = false {
+        didSet {
+            // Announce the current color whenever the user freezes the camera.
+            // Unfreezing is silent — no need to re-read a color that's about to change.
+            guard isFrozen, let color = identifiedColor else { return }
+            let haptics = UserDefaults.standard.object(forKey: "hapticsEnabled")      as? Bool ?? true
+            let voice   = UserDefaults.standard.object(forKey: "voiceFeedbackEnabled") as? Bool ?? true
+            AccessibilityService.shared.announceColor(color, haptics: haptics, voice: voice)
+        }
+    }
     var sessionIsRunning = false
     var errorMessage: String?
 

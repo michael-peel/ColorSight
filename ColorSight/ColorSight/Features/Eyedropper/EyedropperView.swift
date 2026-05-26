@@ -124,6 +124,8 @@ struct EyedropperView: View {
                         withAnimation(.spring(response: 0.2)) {
                             isDragging = false
                         }
+                        // Announce the final color once the user lifts their finger.
+                        viewModel.announceCurrentColor()
                     }
             )
         }
