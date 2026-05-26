@@ -134,12 +134,15 @@ struct EyedropperView: View {
     private let loupeDiameter: CGFloat = 120
 
     private func loupeView(image: UIImage, imgRect: CGRect) -> some View {
-        let r          = loupeDiameter / 2
         let zoom: CGFloat = 3.0
         let loupeW     = imgRect.width  * zoom
         let loupeH     = imgRect.height * zoom
-        let offsetX    = r - viewModel.sampleNorm.x * loupeW
-        let offsetY    = r - viewModel.sampleNorm.y * loupeH
+        // SwiftUI centers children in a ZStack, so the image's center sits at (60,60)
+        // before any offset is applied.  We want sampleNorm → center of loupe (60,60):
+        //   (60 - loupeW/2 + sampleNorm.x * loupeW) + offsetX = 60
+        //   offsetX = loupeW/2 - sampleNorm.x * loupeW = loupeW * (0.5 - sampleNorm.x)
+        let offsetX    = loupeW * (0.5 - viewModel.sampleNorm.x)
+        let offsetY    = loupeH * (0.5 - viewModel.sampleNorm.y)
 
         return ZStack {
             // Magnified image
