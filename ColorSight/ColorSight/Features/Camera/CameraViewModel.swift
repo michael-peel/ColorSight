@@ -30,6 +30,8 @@ final class CameraViewModel: NSObject {
     // MARK: - UI state
 
     var identifiedColor: IdentifiedColor?
+    var isTorchOn = false
+
     var isFrozen = false {
         didSet {
             // Announce the current color whenever the user freezes the camera.
@@ -68,11 +70,41 @@ final class CameraViewModel: NSObject {
     }
 
     func stopSession() {
-        let session = self.session
+        let session    = self.session
+        let threadState = self.threadState
         sessionQueue.async { [weak self] in
             guard let self, session.isRunning else { return }
+            // Turn off the torch before stopping the session.
+            Self.setTorch(false, device: threadState.captureDevice)
             session.stopRunning()
-            DispatchQueue.main.async { self.sessionIsRunning = false }
+            DispatchQueue.main.async {
+                self.sessionIsRunning = false
+                self.isTorchOn = false
+            }
+        }
+    }
+
+    /// Toggles the rear torch on/off.
+    func toggleTorch() {
+        let wantOn     = !isTorchOn
+        let threadState = self.threadState
+        sessionQueue.async { [weak self] in
+            guard Self.setTorch(wantOn, device: threadState.captureDevice) else { return }
+            DispatchQueue.main.async { self?.isTorchOn = wantOn }
+        }
+    }
+
+    /// Sets the torch mode. Returns true if the change succeeded.
+    @discardableResult
+    nonisolated private static func setTorch(_ on: Bool, device: AVCaptureDevice?) -> Bool {
+        guard let device, device.hasTorch, device.isTorchAvailable else { return false }
+        do {
+            try device.lockForConfiguration()
+            device.torchMode = on ? .on : .off
+            device.unlockForConfiguration()
+            return true
+        } catch {
+            return false
         }
     }
 

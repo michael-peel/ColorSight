@@ -60,16 +60,32 @@ struct CameraView: View {
             // MARK: - Top bar (eyedropper left, settings right)
             VStack {
                 HStack {
-                    // Eyedropper button — top-left
-                    Button {
-                        showingEyedropper = true
-                    } label: {
-                        Image(systemName: "eyedropper.halffull")
-                            .font(.title3)
-                            .foregroundStyle(.white)
-                            .padding(10)
-                            .background(.ultraThinMaterial, in: Circle())
-                            .shadow(color: .black.opacity(0.3), radius: 4)
+                    // Eyedropper + Torch — top-left
+                    HStack(spacing: 10) {
+                        Button {
+                            showingEyedropper = true
+                        } label: {
+                            Image(systemName: "eyedropper.halffull")
+                                .font(.title3)
+                                .foregroundStyle(.white)
+                                .padding(10)
+                                .background(.ultraThinMaterial, in: Circle())
+                                .shadow(color: .black.opacity(0.3), radius: 4)
+                        }
+
+                        Button {
+                            viewModel.toggleTorch()
+                        } label: {
+                            Image(systemName: viewModel.isTorchOn
+                                  ? "flashlight.on.fill"
+                                  : "flashlight.off.fill")
+                                .font(.title3)
+                                .foregroundStyle(viewModel.isTorchOn ? Color.yellow : .white)
+                                .padding(10)
+                                .background(.ultraThinMaterial, in: Circle())
+                                .shadow(color: .black.opacity(0.3), radius: 4)
+                        }
+                        .animation(.easeInOut(duration: 0.15), value: viewModel.isTorchOn)
                     }
                     .padding(.leading, 16)
 
