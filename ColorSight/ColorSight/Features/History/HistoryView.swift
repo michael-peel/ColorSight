@@ -96,7 +96,8 @@ struct HistoryView: View {
 
 private struct SwatchRow: View {
     let swatch: ColorSwatch
-    @State private var copied = false
+    @State private var copied       = false
+    @State private var sharePayload: SharePayload?
 
     var body: some View {
         HStack(spacing: 14) {
@@ -136,12 +137,9 @@ private struct SwatchRow: View {
 
             Spacer(minLength: 8)
 
-            // Source icon + copy button
-            VStack(spacing: 6) {
-                Image(systemName: swatch.sourceIcon)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-
+            // Copy + Share buttons
+            HStack(spacing: 16) {
+                // Copy hex
                 Button {
                     UIPasteboard.general.string = swatch.hex
                     withAnimation(.spring(response: 0.2)) { copied = true }
@@ -156,11 +154,30 @@ private struct SwatchRow: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(copied ? "Copied" : "Copy hex code")
+
+                // Share swatch image
+                Button {
+                    let img = SwatchImageRenderer.render(swatch: swatch)
+                    sharePayload = SharePayload(
+                        items:   [img, "\(swatch.simpleName) – \(swatch.hex)"],
+                        subject: swatch.simpleName
+                    )
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Share \(swatch.simpleName)")
             }
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(swatch.simpleName), \(swatch.hex), saved \(swatch.timestamp.formatted(.relative(presentation: .named)))")
+        .sheet(item: $sharePayload) { payload in
+            ActivityView(items: payload.items, subject: payload.subject)
+        }
     }
 }
 

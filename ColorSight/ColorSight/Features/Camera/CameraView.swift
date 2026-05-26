@@ -11,6 +11,7 @@ struct CameraView: View {
     @State private var showingHistory    = false
     @State private var isRefocusing      = false
     @State private var pressWorkItem:    DispatchWorkItem? = nil
+    @State private var sharePayload:     SharePayload?
 
     // Safe-area insets read directly from UIKit so we can place UI elements
     // correctly after making the ZStack full-screen with .ignoresSafeArea().
@@ -155,6 +156,9 @@ struct CameraView: View {
         .sheet(isPresented: $showingHistory) {
             HistoryView()
         }
+        .sheet(item: $sharePayload) { payload in
+            ActivityView(items: payload.items, subject: payload.subject)
+        }
         .fullScreenCover(isPresented: $showingEyedropper) {
             EyedropperView()
         }
@@ -215,13 +219,25 @@ struct CameraView: View {
                 .padding(.vertical, 14)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                // Frozen badge
+                // Share button — visible only when frozen
+                // (lock indicator already shown in the crosshair ring)
                 if viewModel.isFrozen {
-                    Image(systemName: "lock.fill")
-                        .font(.callout)
-                        .foregroundStyle(.white.opacity(0.8))
-                        .padding(.trailing, 14)
-                        .transition(.scale.combined(with: .opacity))
+                    Button {
+                        let img = SwatchImageRenderer.render(color: color)
+                        sharePayload = SharePayload(
+                            items:   [img, "\(color.simpleName) – \(color.hex)"],
+                            subject: color.simpleName
+                        )
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.callout)
+                            .foregroundStyle(.white)
+                            .frame(width: 36, height: 36)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 12)
+                    .transition(.scale.combined(with: .opacity))
                 }
             }
             .frame(height: 100)
