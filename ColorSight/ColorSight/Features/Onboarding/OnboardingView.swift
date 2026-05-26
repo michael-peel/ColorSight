@@ -241,6 +241,7 @@ private extension CVDProfile {
     /// Short plain-English name shown on the card heading.
     var onboardingTitle: String {
         switch self {
+        case .normal:        return "No Color Deficiency"
         case .deuteranopia:  return "Red-Green (Green-type)"
         case .protanopia:    return "Red-Green (Red-type)"
         case .tritanopia:    return "Blue-Yellow"
@@ -252,6 +253,8 @@ private extension CVDProfile {
     /// One-line description of what the user actually experiences.
     var experienceDescription: String {
         switch self {
+        case .normal:
+            return "Colors appear as most people see them."
         case .deuteranopia:
             return "Reds and greens can look brownish or the same."
         case .protanopia:
@@ -268,6 +271,7 @@ private extension CVDProfile {
     /// SF Symbol for the card icon.
     var onboardingIcon: String {
         switch self {
+        case .normal:        return "eye"
         case .deuteranopia:  return "eye.trianglebadge.exclamationmark"
         case .protanopia:    return "eye.trianglebadge.exclamationmark"
         case .tritanopia:    return "eye.trianglebadge.exclamationmark"
@@ -280,6 +284,8 @@ private extension CVDProfile {
     /// nil for profiles that don't have a simple two-color confusion.
     var confusionColors: (Color, Color)? {
         switch self {
+        case .normal:
+            return nil
         case .deuteranopia:
             // Red (#CC3300) and olive green (#6B8E00) look similar
             return (Color(red: 0.80, green: 0.20, blue: 0.00),

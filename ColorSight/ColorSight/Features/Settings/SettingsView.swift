@@ -144,6 +144,7 @@ private extension CVDProfile {
 
     var shortSettingsName: String {
         switch self {
+        case .normal:        return "Normal Vision"
         case .deuteranopia:  return "Deuteranopia"
         case .protanopia:    return "Protanopia"
         case .tritanopia:    return "Tritanopia"
@@ -154,6 +155,7 @@ private extension CVDProfile {
 
     var settingsDescription: String {
         switch self {
+        case .normal:        return "Standard color vision — no adjustments applied"
         case .deuteranopia:  return "Red-green (green-type) — most common"
         case .protanopia:    return "Red-green (red-type) — reds appear dark"
         case .tritanopia:    return "Blue-yellow — blues and greens look alike"
@@ -164,6 +166,8 @@ private extension CVDProfile {
 
     var settingsIcon: String {
         switch self {
+        case .normal:
+            return "eye"
         case .deuteranopia, .protanopia, .tritanopia:
             return "eye.trianglebadge.exclamationmark"
         case .achromatopsia:

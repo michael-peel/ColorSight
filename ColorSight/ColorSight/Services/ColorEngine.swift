@@ -288,6 +288,9 @@ final class ColorEngine: Sendable {
         let saturation = hsl.s < 0.15 ? "muted " : hsl.s > 0.7 ? "vivid " : ""
 
         switch profile {
+        case .normal:
+            return "\(brightness) \(saturation)\(genericHueLabel(h: hsl.h)) tone"
+
         case .deuteranopia, .protanopia:
             // Avoid "red" / "green"; lean on brightness, warmth, blue cues
             let warmth = warmthLabel(h: hsl.h, profile: profile)
