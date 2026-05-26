@@ -6,6 +6,7 @@ struct CameraView: View {
     @State private var showingSettings   = false
     @State private var showingEyedropper = false
     @State private var isRefocusing      = false
+    @State private var pressWorkItem:    DispatchWorkItem? = nil
 
     // Safe-area insets read directly from UIKit so we can place UI elements
     // correctly after making the ZStack full-screen with .ignoresSafeArea().
@@ -99,24 +100,38 @@ struct CameraView: View {
             }
         }
         .ignoresSafeArea()   // ← ZStack fills full screen; crosshair at true center
-        // Long press gets high priority so SwiftUI doesn't let the tap gesture
-        // consume the touch first. When the minimum duration is NOT met (quick tap)
-        // the long press fails and the tap fires normally — no conflict.
-        .highPriorityGesture(
-            LongPressGesture(minimumDuration: 0.45)
+        // Single drag gesture (minimumDistance: 0) handles both tap and long press
+        // reliably — SwiftUI's LongPressGesture + TapGesture combination is prone
+        // to the tap consuming touches before the long-press timer can accumulate.
+        //
+        // Logic:
+        //   • Touch down  → schedule a DispatchWorkItem for 0.45 s from now
+        //   • Finger lifts before 0.45 s → cancel work item, treat as tap (freeze toggle)
+        //   • Work item fires (finger still down after 0.45 s) → long press → refocus
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    guard pressWorkItem == nil else { return }   // already started
+                    let work = DispatchWorkItem {
+                        pressWorkItem = nil
+                        viewModel.refocus()
+                        withAnimation(.easeIn(duration: 0.15))  { isRefocusing = true  }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            withAnimation(.easeOut(duration: 0.3)) { isRefocusing = false }
+                        }
+                    }
+                    pressWorkItem = work
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: work)
+                }
                 .onEnded { _ in
-                    viewModel.refocus()
-                    withAnimation(.easeIn(duration: 0.15))  { isRefocusing = true  }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        withAnimation(.easeOut(duration: 0.3)) { isRefocusing = false }
+                    guard let work = pressWorkItem else { return }  // long press fired
+                    work.cancel()
+                    pressWorkItem = nil
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                        viewModel.isFrozen.toggle()
                     }
                 }
         )
-        .onTapGesture {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                viewModel.isFrozen.toggle()
-            }
-        }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
