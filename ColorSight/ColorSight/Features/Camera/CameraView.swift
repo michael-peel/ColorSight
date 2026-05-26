@@ -6,26 +6,33 @@ struct CameraView: View {
     @State private var showingSettings   = false
     @State private var showingEyedropper = false
 
+    // Safe-area insets read directly from UIKit so we can place UI elements
+    // correctly after making the ZStack full-screen with .ignoresSafeArea().
+    // The ZStack must fill the full screen so CrosshairView is centered at the
+    // same pixel the camera actually samples (the geometric center of the frame),
+    // not the center of the smaller safe-area rectangle.
+    private var safeInsets: UIEdgeInsets {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.keyWindow?.safeAreaInsets ?? .zero
+    }
+
     var body: some View {
         ZStack {
             // MARK: - Live preview (full screen)
             CameraPreviewView(session: viewModel.session)
-                .ignoresSafeArea()
 
             // MARK: - Center crosshair
-            // Anchored to a full-screen clear layer (ignoring safe areas) so the
-            // crosshair center matches the camera's sampled pixel — which is the
-            // geometric center of the full pixel buffer, not the safe-area center.
-            Color.clear
-                .ignoresSafeArea()
-                .overlay(CrosshairView(isFrozen: viewModel.isFrozen))
+            // Because the ZStack ignores safe areas, this is centered on the
+            // true screen center — matching the camera's sampled pixel exactly.
+            CrosshairView(isFrozen: viewModel.isFrozen)
 
             // MARK: - Bottom HUD
             VStack {
                 Spacer()
                 colorInfoCard
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 40)
+                    .padding(.bottom, 40 + safeInsets.bottom)
             }
 
             // MARK: - Top bar (eyedropper left, settings right)
@@ -59,7 +66,7 @@ struct CameraView: View {
                     }
                     .padding(.trailing, 16)
                 }
-                .padding(.top, 12)
+                .padding(.top, safeInsets.top + 12)   // clear Dynamic Island / status bar
                 Spacer()
             }
 
@@ -72,11 +79,12 @@ struct CameraView: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
                         .background(.red.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
-                        .padding(.top, 60)
+                        .padding(.top, safeInsets.top + 8)
                     Spacer()
                 }
             }
         }
+        .ignoresSafeArea()   // ← ZStack fills full screen; crosshair at true center
         .onTapGesture {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                 viewModel.isFrozen.toggle()
