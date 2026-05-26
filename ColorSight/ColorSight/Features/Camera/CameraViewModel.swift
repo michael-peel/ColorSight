@@ -171,10 +171,20 @@ extension CameraViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
         let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
         guard let base  = CVPixelBufferGetBaseAddress(pixelBuffer) else { return }
 
-        // Read center pixel — BGRA layout
-        let offset = (height / 2) * bytesPerRow + (width / 2) * 4
-        let pixel  = base.advanced(by: offset).assumingMemoryBound(to: UInt8.self)
-        let b = pixel[0], g = pixel[1], r = pixel[2]
+        // Sample the center — either a single pixel or an averaged 21×21 region.
+        // UserDefaults is thread-safe; reading a Bool here is fast (~µs).
+        let r: UInt8, g: UInt8, b: UInt8
+        if UserDefaults.standard.bool(forKey: "regionSamplingEnabled") {
+            (r, g, b) = Self.averageRegion(
+                base: base, width: width, height: height,
+                bytesPerRow: bytesPerRow,
+                cx: width / 2, cy: height / 2, radius: 10   // 21×21 = 441 pixels
+            )
+        } else {
+            let offset = (height / 2) * bytesPerRow + (width / 2) * 4
+            let pixel  = base.advanced(by: offset).assumingMemoryBound(to: UInt8.self)
+            (r, g, b) = (pixel[2], pixel[1], pixel[0])      // BGRA → RGB
+        }
 
         // ColorEngine.identify() is ~10µs — fast enough to run on MainActor.
         // Skip the update when frozen so the card holds its last value.
@@ -189,4 +199,32 @@ extension CameraViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
         didDrop sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) { }
+
+    // MARK: - Region averaging
+
+    /// Averages all pixels in a (2*radius+1) × (2*radius+1) square centered on (cx, cy).
+    /// Returns the mean R, G, B as UInt8. BGRA pixel layout assumed.
+    nonisolated private static func averageRegion(
+        base: UnsafeRawPointer,
+        width: Int, height: Int, bytesPerRow: Int,
+        cx: Int, cy: Int, radius: Int
+    ) -> (r: UInt8, g: UInt8, b: UInt8) {
+        var sumR = 0, sumG = 0, sumB = 0, n = 0
+
+        let rowMin = max(0, cy - radius);  let rowMax = min(height - 1, cy + radius)
+        let colMin = max(0, cx - radius);  let colMax = min(width  - 1, cx + radius)
+
+        for row in rowMin...rowMax {
+            for col in colMin...colMax {
+                let px = base
+                    .advanced(by: row * bytesPerRow + col * 4)
+                    .assumingMemoryBound(to: UInt8.self)
+                sumB += Int(px[0]); sumG += Int(px[1]); sumR += Int(px[2])
+                n += 1
+            }
+        }
+
+        guard n > 0 else { return (0, 0, 0) }
+        return (r: UInt8(sumR / n), g: UInt8(sumG / n), b: UInt8(sumB / n))
+    }
 }

@@ -6,6 +6,8 @@ struct CameraView: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var viewModel         = CameraViewModel()
+    @AppStorage("regionSamplingEnabled") private var regionSamplingEnabled = false
+
     @State private var showingSettings   = false
     @State private var showingEyedropper = false
     @State private var showingHistory    = false
@@ -32,7 +34,7 @@ struct CameraView: View {
             // MARK: - Center crosshair
             // Because the ZStack ignores safe areas, this is centered on the
             // true screen center — matching the camera's sampled pixel exactly.
-            CrosshairView(isFrozen: viewModel.isFrozen)
+            CrosshairView(isFrozen: viewModel.isFrozen, isRegionMode: regionSamplingEnabled)
 
             // MARK: - Refocus feedback pill (appears just below crosshair)
             if isRefocusing {
@@ -270,11 +272,24 @@ struct CameraView: View {
 // MARK: - Crosshair
 
 private struct CrosshairView: View {
-    var isFrozen: Bool
+    var isFrozen:     Bool
+    var isRegionMode: Bool
 
     var body: some View {
         ZStack {
-            // Ring — accent-colored when frozen
+            // Outer dashed ring — visible in region mode to indicate the sampled area
+            if isRegionMode {
+                Circle()
+                    .strokeBorder(
+                        style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])
+                    )
+                    .foregroundStyle(.white.opacity(0.65))
+                    .frame(width: 70, height: 70)
+                    .shadow(color: .black.opacity(0.3), radius: 2)
+                    .transition(.scale.combined(with: .opacity))
+            }
+
+            // Inner ring — accent-colored when frozen
             Circle()
                 .strokeBorder(
                     isFrozen ? Color.accentColor : .white,

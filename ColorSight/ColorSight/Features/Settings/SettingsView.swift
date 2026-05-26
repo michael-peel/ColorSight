@@ -9,24 +9,29 @@ struct SettingsView: View {
     // CVD profile — read/written via CVDProfile.load() / profile.save()
     @State private var selectedProfile: CVDProfile = CVDProfile.load()
 
-    // Accessibility preferences — wired into behaviour when those features are built
-    @AppStorage("hapticsEnabled")      private var hapticsEnabled      = true
-    @AppStorage("voiceFeedbackEnabled") private var voiceFeedbackEnabled = true
+    @AppStorage("hapticsEnabled")        private var hapticsEnabled        = true
+    @AppStorage("voiceFeedbackEnabled")  private var voiceFeedbackEnabled  = true
+    @AppStorage("regionSamplingEnabled") private var regionSamplingEnabled = false
 
     var body: some View {
         NavigationStack {
             Form {
 
                 // MARK: Preferences
-                Section("Preferences") {
+                Section {
                     NavigationLink {
                         ProfilePickerPage(selectedProfile: $selectedProfile)
                     } label: {
                         LabeledContent("Color Profile", value: selectedProfile.shortSettingsName)
                     }
 
-                    Toggle("Vibration", isOn: $hapticsEnabled)
+                    Toggle("Vibration",      isOn: $hapticsEnabled)
                     Toggle("Voice Feedback", isOn: $voiceFeedbackEnabled)
+                    Toggle("Sample Region",  isOn: $regionSamplingEnabled)
+                } header: {
+                    Text("Preferences")
+                } footer: {
+                    Text("Sample Region averages a small area of pixels instead of a single point, giving smoother, more stable readings on textured or patterned surfaces.")
                 }
 
                 // MARK: About
