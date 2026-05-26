@@ -1,0 +1,84 @@
+import SwiftUI
+import PhotosUI
+
+// MARK: - ViewModel
+
+/// Manages photo selection and pixel sampling for the eyedropper feature.
+/// All state is on the MainActor; pixel reads are fast (single CGContext call).
+@Observable
+@MainActor
+final class EyedropperViewModel {
+
+    // MARK: - UI state
+
+    var displayImage: UIImage?          // Orientation-normalised image ready for display
+    var identifiedColor: IdentifiedColor?
+    var sampleNorm: CGPoint = CGPoint(x: 0.5, y: 0.5)  // Normalised 0–1 within image
+    var isLoadingImage = false
+
+    // MARK: - Internals
+
+    let colorEngine = ColorEngine()
+
+    // MARK: - Photo loading
+
+    /// Load, normalise orientation, and sample the centre pixel.
+    func loadImage(from item: PhotosPickerItem) async {
+        isLoadingImage = true
+        defer { isLoadingImage = false }
+
+        guard let data = try? await item.loadTransferable(type: Data.self),
+              let raw = UIImage(data: data)
+        else { return }
+
+        displayImage = raw.orientationNormalised()
+        sampleColor(atNormalized: CGPoint(x: 0.5, y: 0.5))
+    }
+
+    // MARK: - Color sampling
+
+    /// Sample the pixel at `point` (normalised 0–1 in image space) and update identifiedColor.
+    func sampleColor(atNormalized point: CGPoint) {
+        guard let image = displayImage else { return }
+        sampleNorm = point
+        guard let (r, g, b) = image.pixelColor(atNormalized: point) else { return }
+        identifiedColor = colorEngine.identify(r: r, g: g, b: b)
+    }
+}
+
+// MARK: - UIImage helpers
+
+extension UIImage {
+
+    /// Returns a copy of the image with `.up` orientation so pixel coordinates are predictable.
+    func orientationNormalised() -> UIImage {
+        guard imageOrientation != .up else { return self }
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in draw(at: .zero) }
+    }
+
+    /// Reads the RGBA pixel at a normalised point (0–1) and returns (r, g, b).
+    func pixelColor(atNormalized point: CGPoint) -> (r: UInt8, g: UInt8, b: UInt8)? {
+        guard let cg = cgImage else { return nil }
+
+        let px = Int((point.x * CGFloat(cg.width)).rounded())
+        let py = Int((point.y * CGFloat(cg.height)).rounded())
+        let cx = max(0, min(cg.width  - 1, px))
+        let cy = max(0, min(cg.height - 1, py))
+
+        guard let crop = cg.cropping(to: CGRect(x: cx, y: cy, width: 1, height: 1)) else { return nil }
+
+        var pixel = [UInt8](repeating: 0, count: 4)
+        let space = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(
+            data: &pixel,
+            width: 1, height: 1,
+            bitsPerComponent: 8, bytesPerRow: 4,
+            space: space,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        ctx.draw(crop, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        return (pixel[0], pixel[1], pixel[2])
+    }
+}

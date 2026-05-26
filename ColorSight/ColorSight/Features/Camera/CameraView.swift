@@ -2,8 +2,9 @@ import SwiftUI
 
 struct CameraView: View {
 
-    @State private var viewModel      = CameraViewModel()
-    @State private var showingSettings = false
+    @State private var viewModel         = CameraViewModel()
+    @State private var showingSettings   = false
+    @State private var showingEyedropper = false
 
     var body: some View {
         ZStack {
@@ -22,10 +23,25 @@ struct CameraView: View {
                     .padding(.bottom, 40)
             }
 
-            // MARK: - Top bar (settings gear)
+            // MARK: - Top bar (eyedropper left, settings right)
             VStack {
                 HStack {
+                    // Eyedropper button — top-left
+                    Button {
+                        showingEyedropper = true
+                    } label: {
+                        Image(systemName: "eyedropper.halffull")
+                            .font(.title3)
+                            .foregroundStyle(.white)
+                            .padding(10)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .shadow(color: .black.opacity(0.3), radius: 4)
+                    }
+                    .padding(.leading, 16)
+
                     Spacer()
+
+                    // Settings button — top-right
                     Button {
                         showingSettings = true
                     } label: {
@@ -36,9 +52,9 @@ struct CameraView: View {
                             .background(.ultraThinMaterial, in: Circle())
                             .shadow(color: .black.opacity(0.3), radius: 4)
                     }
-                    .padding(.top, 12)
                     .padding(.trailing, 16)
                 }
+                .padding(.top, 12)
                 Spacer()
             }
 
@@ -63,6 +79,9 @@ struct CameraView: View {
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
+        }
+        .fullScreenCover(isPresented: $showingEyedropper) {
+            EyedropperView()
         }
         .onAppear  { viewModel.startSession() }
         .onDisappear { viewModel.stopSession() }
