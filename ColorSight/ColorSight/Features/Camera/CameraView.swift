@@ -2,7 +2,8 @@ import SwiftUI
 
 struct CameraView: View {
 
-    @State private var viewModel = CameraViewModel()
+    @State private var viewModel      = CameraViewModel()
+    @State private var showingSettings = false
 
     var body: some View {
         ZStack {
@@ -19,6 +20,26 @@ struct CameraView: View {
                 colorInfoCard
                     .padding(.horizontal, 16)
                     .padding(.bottom, 40)
+            }
+
+            // MARK: - Top bar (settings gear)
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        showingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.title3)
+                            .foregroundStyle(.white)
+                            .padding(10)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .shadow(color: .black.opacity(0.3), radius: 4)
+                    }
+                    .padding(.top, 12)
+                    .padding(.trailing, 16)
+                }
+                Spacer()
             }
 
             // MARK: - Error banner
@@ -39,6 +60,9 @@ struct CameraView: View {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                 viewModel.isFrozen.toggle()
             }
+        }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView()
         }
         .onAppear  { viewModel.startSession() }
         .onDisappear { viewModel.stopSession() }
