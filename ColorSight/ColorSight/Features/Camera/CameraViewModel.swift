@@ -10,8 +10,9 @@ import Observation
 // Each var is accessed from exactly ONE queue, so no locks are needed.
 
 private final class CameraThreadState: @unchecked Sendable {
-    nonisolated(unsafe) var isConfigured   = false  // sessionQueue only
-    nonisolated(unsafe) var lastSampleTime: Double = 0  // sampleQueue only
+    nonisolated(unsafe) var isConfigured   = false               // sessionQueue only
+    nonisolated(unsafe) var lastSampleTime: Double = 0           // sampleQueue only
+    nonisolated(unsafe) var captureDevice: AVCaptureDevice?      // sessionQueue only
 }
 
 // MARK: - ViewModel
@@ -87,6 +88,7 @@ final class CameraViewModel: NSObject {
             session.canAddInput(input)
         else { postError("Could not access the back camera."); return }
         session.addInput(input)
+        threadState.captureDevice = device   // kept for refocus()
 
         let output = AVCaptureVideoDataOutput()
         output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
@@ -98,6 +100,35 @@ final class CameraViewModel: NSObject {
 
         if let conn = output.connection(with: .video), conn.isVideoRotationAngleSupported(90) {
             conn.videoRotationAngle = 90
+        }
+    }
+
+    // MARK: - Refocus (MainActor entry point, runs on sessionQueue)
+
+    func refocus() {
+        let threadState = self.threadState
+        sessionQueue.async {
+            guard let device = threadState.captureDevice else { return }
+            do {
+                try device.lockForConfiguration()
+                let center = CGPoint(x: 0.5, y: 0.5)
+                // Re-trigger continuous AF — resets any locked or drifted focus.
+                if device.isFocusModeSupported(.continuousAutoFocus) {
+                    device.focusPointOfInterest = center
+                    device.focusMode = .continuousAutoFocus
+                } else if device.isFocusModeSupported(.autoFocus) {
+                    device.focusPointOfInterest = center
+                    device.focusMode = .autoFocus
+                }
+                // Reset exposure at the same point for consistency.
+                if device.isExposureModeSupported(.continuousAutoExposure) {
+                    device.exposurePointOfInterest = center
+                    device.exposureMode = .continuousAutoExposure
+                }
+                device.unlockForConfiguration()
+            } catch {
+                // Non-critical — silently ignore
+            }
         }
     }
 

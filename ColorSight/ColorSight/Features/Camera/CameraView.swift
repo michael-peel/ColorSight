@@ -5,6 +5,7 @@ struct CameraView: View {
     @State private var viewModel         = CameraViewModel()
     @State private var showingSettings   = false
     @State private var showingEyedropper = false
+    @State private var isRefocusing      = false
 
     // Safe-area insets read directly from UIKit so we can place UI elements
     // correctly after making the ZStack full-screen with .ignoresSafeArea().
@@ -26,6 +27,19 @@ struct CameraView: View {
             // Because the ZStack ignores safe areas, this is centered on the
             // true screen center — matching the camera's sampled pixel exactly.
             CrosshairView(isFrozen: viewModel.isFrozen)
+
+            // MARK: - Refocus feedback pill (appears just below crosshair)
+            if isRefocusing {
+                Text("Refocusing…")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .offset(y: 36)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    .allowsHitTesting(false)
+            }
 
             // MARK: - Bottom HUD
             VStack {
@@ -88,6 +102,13 @@ struct CameraView: View {
         .onTapGesture {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                 viewModel.isFrozen.toggle()
+            }
+        }
+        .onLongPressGesture(minimumDuration: 0.45) {
+            viewModel.refocus()
+            withAnimation(.easeIn(duration: 0.15))  { isRefocusing = true  }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                withAnimation(.easeOut(duration: 0.3)) { isRefocusing = false }
             }
         }
         .sheet(isPresented: $showingSettings) {
