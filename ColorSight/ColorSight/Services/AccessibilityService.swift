@@ -37,13 +37,15 @@ final class AccessibilityService {
         }
 
         if voice {
-            let text = "\(color.simpleName). \(color.hex)"
             if UIAccessibility.isVoiceOverRunning {
-                // VoiceOver is active — use the accessibility notification so it's
-                // read aloud in the user's configured voice and interrupted properly.
+                // VoiceOver is active — speak the full CVD description so the user
+                // gets colour name + profile-adapted context in one announcement.
+                let text = "\(color.simpleName). \(color.cvdDescription) Hex: \(color.hex)."
                 UIAccessibility.post(notification: .announcement, argument: text)
             } else {
                 // Plain speech for sighted users who enabled Voice Feedback.
+                // Keep it short: name + hex only (description is visible on screen).
+                let text = "\(color.simpleName). \(color.hex)"
                 let utterance      = AVSpeechUtterance(string: text)
                 utterance.rate     = AVSpeechUtteranceDefaultSpeechRate
                 utterance.pitchMultiplier = 1.0

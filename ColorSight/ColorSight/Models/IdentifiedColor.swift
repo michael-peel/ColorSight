@@ -7,7 +7,7 @@ struct IdentifiedColor: Equatable {
     let hex: String                         // e.g. "#87CEEB"
     let rgb: RGBComponents
     let hsl: HSLComponents
-    let cvdDescription: String              // Profile-adapted description (v1: algorithmic)
+    let cvdDescription: String              // Plain-language description adapted to the user's CVD profile
 
     // MARK: - Component types
 

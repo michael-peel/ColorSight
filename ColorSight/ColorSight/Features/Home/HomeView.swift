@@ -483,16 +483,16 @@ private struct ColorSightLogo: View {
                 path.closeSubpath()
                 ctx.fill(path, with: .color(segmentColors[i]))
             }
-
-            // White fill inside the ring so the dark eye sits on a clean white base
-            ctx.fill(
-                Path(ellipseIn: CGRect(x: cx - innerR + 1, y: cy - innerR + 1,
-                                       width: (innerR - 1) * 2, height: (innerR - 1) * 2)),
-                with: .color(.white)
-            )
+            // Inner fill is handled by the systemBackground overlay below the eye circle.
         }
         .frame(width: size, height: size)
         .overlay {
+            // Adaptive fill behind the eye — matches the system background so the
+            // inner ring area looks clean in both light and dark mode.
+            Circle()
+                .fill(Color(.systemBackground))
+                .frame(width: (size * 0.29 - 1) * 2, height: (size * 0.29 - 1) * 2)
+
             // Dark navy eye circle
             Circle()
                 .fill(Color(red: 0.09, green: 0.10, blue: 0.16))

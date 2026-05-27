@@ -64,21 +64,24 @@ struct HistoryView: View {
     // MARK: - Empty state
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 52))
-                .foregroundStyle(.secondary)
+        VStack(spacing: 20) {
+            Image(systemName: "swatchpalette")
+                .font(.system(size: 56))
+                .foregroundStyle(.quaternary)
 
-            Text("No colors saved yet")
-                .font(.title3.weight(.medium))
+            VStack(spacing: 8) {
+                Text("No saved colors yet")
+                    .font(.title3.weight(.semibold))
 
-            Text("Tap the viewfinder to freeze a color.\nIt will appear here automatically.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+                Text("Identify a color with the camera or eyedropper — every color you lock in is saved here automatically.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 36)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.bottom, 60)   // shift slightly above true center
     }
 
     // MARK: - Delete helpers

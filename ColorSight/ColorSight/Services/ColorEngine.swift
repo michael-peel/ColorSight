@@ -151,7 +151,7 @@ final class ColorEngine: Sendable {
         let hsl = Self.rgbToHSL(r: Int(r), g: Int(g), b: Int(b))
         let hex = String(format: "#%02X%02X%02X", r, g, b)
         let name = nearest?.name ?? simpleName   // fallback if DB somehow empty
-        let cvdDesc = generateCVDDescription(name: name, hsl: hsl, profile: profile)
+        let cvdDesc = generateCVDDescription(name: name, simpleName: simpleName, hsl: hsl, profile: profile)
 
         return IdentifiedColor(
             simpleName: simpleName,
@@ -275,86 +275,155 @@ final class ColorEngine: Sendable {
         return .init(h: h < 0 ? h + 360 : h, s: s, l: l)
     }
 
-    // MARK: - CVD description (v1: algorithmic — needs polish)
+    // MARK: - CVD description (v2: plain-language, per-profile)
+    //
+    // One or two short sentences that:
+    //   • Lead with what the color IS — name first, then context.
+    //   • Use real-world reference points for easy cross-checking.
+    //   • Honestly acknowledge what may look different for that CVD type.
+    //   • Stay concise so VoiceOver reads them in ≤ 3 seconds.
 
     private func generateCVDDescription(
         name: String,
+        simpleName: String,
         hsl: IdentifiedColor.HSLComponents,
         profile: CVDProfile
     ) -> String {
-        let brightness = brightnessLabel(l: hsl.l)
-        let saturation = hsl.s < 0.15 ? "muted " : hsl.s > 0.7 ? "vivid " : ""
+        let h = hsl.h
+        let s = hsl.s
+        let l = hsl.l
+
+        // Near-neutral colours: hue barely matters for any profile.
+        if s < 0.12 {
+            if l > 0.92 { return "White or near-white — no significant colour." }
+            if l < 0.10 { return "Black or near-black — no significant colour." }
+            return "\(lightnessLabel(l: l)) gray — unsaturated, no strong hue."
+        }
 
         switch profile {
+
+        // ── Normal vision ─────────────────────────────────────────────────────
         case .normal:
-            return "\(brightness) \(saturation)\(genericHueLabel(h: hsl.h)) tone"
+            let sat = s < 0.20 ? "muted " : s > 0.70 ? "vivid " : ""
+            return "\(lightnessLabel(l: l).capitalized), \(sat)\(plainHue(h))."
 
+        // ── Red-green (deuteranopia / protanopia) ─────────────────────────────
+        // Blues (185–265°) and yellows (42–72°) are anchor colours — seen clearly.
+        // Reds, greens, oranges, and browns are the confusion zone.
         case .deuteranopia, .protanopia:
-            // Avoid "red" / "green"; lean on brightness, warmth, blue cues
-            let warmth = warmthLabel(h: hsl.h, profile: profile)
-            return "\(brightness) \(saturation)\(warmth) tone"
+            if s < 0.20 {
+                return "\(name). Near-neutral — mostly \(lightnessLabel(l: l)) with very little colour."
+            }
+            if h > 185 && h < 265 {
+                return "\(name). Blue — you see blues clearly. \(lightnessLabel(l: l).capitalized), similar to \(blueAnchor(h, l))."
+            }
+            if h > 42 && h < 72 {
+                return "\(name). Yellow — you distinguish yellows well. \(lightnessLabel(l: l).capitalized), like \(yellowAnchor(l))."
+            }
+            if h > 265 && h < 310 {
+                return "\(name). Purple — may look more blue-ish to you, but this is purple, not blue."
+            }
+            if (h > 310 || h < 12) && l > 0.68 {
+                return "\(name). Light pink — may appear pale or grey-ish to you, but this is pink."
+            }
+            // Confusion zone: reds, greens, oranges, browns.
+            return "\(name). \(redGreenZone(h: h, l: l))"
 
+        // ── Blue-yellow (tritanopia) ───────────────────────────────────────────
+        // Blues look greenish; yellows look pinkish or reddish.
+        // Reds and greens are anchor colours.
         case .tritanopia:
-            // Avoid "blue" / "yellow"; lean on red/green and brightness
-            let hueDesc = tritanopiaHueLabel(h: hsl.h)
-            return "\(brightness) \(saturation)\(hueDesc)"
+            if s < 0.20 {
+                return "\(name). Near-neutral — mostly \(lightnessLabel(l: l)) with very little colour."
+            }
+            if h > 180 && h < 260 {
+                return "\(name). Blue — may appear greenish to you. This IS blue, not green. Similar to \(blueAnchor(h, l))."
+            }
+            if h > 155 && h <= 180 {
+                return "\(name). Teal — sits on the blue-green boundary you find tricky. It leans blue."
+            }
+            if h > 42 && h < 72 {
+                return "\(name). Yellow — may appear pinkish or reddish to you. This IS yellow, like a lemon or sunflower."
+            }
+            if h > 72 && h < 155 {
+                return "\(name). Green — you see greens clearly. \(lightnessLabel(l: l).capitalized) green."
+            }
+            if h < 42 || h > 330 {
+                return "\(name). \(h > 310 ? "Pink" : "Red") — you see reds and pinks clearly."
+            }
+            return "\(name). \(lightnessLabel(l: l).capitalized) \(plainHue(h))."
 
+        // ── Full colour blindness (achromatopsia) ─────────────────────────────
+        // No functional hue — only brightness is reliable.
         case .achromatopsia:
-            // No hue — only brightness and texture
-            return "\(brightness) shade"
+            let pct = Int(round(l * 100))
+            return "\(name). Appears as \(lightnessLabel(l: l)) grey to you — about \(pct)% brightness on a greyscale."
         }
     }
 
-    private func brightnessLabel(l: Double) -> String {
+    // MARK: - Description helpers
+
+    private func lightnessLabel(l: Double) -> String {
         switch l {
-        case ..<0.15: return "Very dark"
-        case ..<0.30: return "Dark"
-        case ..<0.45: return "Medium-dark"
-        case ..<0.55: return "Medium"
-        case ..<0.70: return "Medium-light"
-        case ..<0.85: return "Light"
-        default:      return "Very light"
+        case ..<0.12: return "very dark"
+        case ..<0.28: return "dark"
+        case ..<0.45: return "medium-dark"
+        case ..<0.58: return "medium"
+        case ..<0.75: return "light"
+        case ..<0.90: return "very light"
+        default:      return "near-white"
         }
     }
 
-    private func warmthLabel(h: Double, profile: CVDProfile) -> String {
-        // Deuteranopia/protanopia: describe by warm/cool/neutral and blue-end hues
-        switch h {
-        case 0..<30:   return "warm"
-        case 30..<60:  return "warm golden"
-        case 60..<90:  return "warm yellowish"
-        case 90..<150: return "neutral"
-        case 150..<200: return "cool"
-        case 200..<260: return "blue"
-        case 260..<290: return "violet"
-        case 290..<330: return "cool pink"
-        default:        return "warm"
-        }
-    }
-
-    private func tritanopiaHueLabel(h: Double) -> String {
-        switch h {
-        case 0..<30:    return "red"
-        case 30..<90:   return "warm neutral"
-        case 90..<150:  return "green"
-        case 150..<210: return "cool green"
-        case 210..<270: return "neutral cool"
-        case 270..<330: return "pink-red"
-        default:        return "red"
-        }
-    }
-
-    private func genericHueLabel(h: Double) -> String {
+    private func plainHue(_ h: Double) -> String {
         switch h {
         case 0..<15:    return "red"
-        case 15..<45:   return "orange"
-        case 45..<75:   return "yellow"
-        case 75..<150:  return "green"
-        case 150..<195: return "cyan"
-        case 195..<255: return "blue"
+        case 15..<38:   return "red-orange"
+        case 38..<55:   return "orange"
+        case 55..<75:   return "yellow"
+        case 75..<105:  return "yellow-green"
+        case 105..<150: return "green"
+        case 150..<185: return "teal"
+        case 185..<255: return "blue"
         case 255..<285: return "indigo"
-        case 285..<345: return "purple"
+        case 285..<320: return "purple"
+        case 320..<345: return "pink"
         default:        return "red"
+        }
+    }
+
+    private func blueAnchor(_ h: Double, _ l: Double) -> String {
+        if l < 0.25 { return "deep ocean water or navy denim" }
+        if l > 0.78 { return "a pale sky or light ice" }
+        if h > 225  { return "a clear midday sky" }
+        return "the sky or clean water"
+    }
+
+    private func yellowAnchor(_ l: Double) -> String {
+        if l < 0.40 { return "dark mustard or old gold" }
+        if l > 0.88 { return "cream or pale straw" }
+        return "a lemon or sunflower"
+    }
+
+    /// Description for colours in the red-green confusion zone.
+    private func redGreenZone(h: Double, l: Double) -> String {
+        switch h {
+        case 0..<20:
+            let anchor = l < 0.38 ? "dark brick or dried blood" : "a stop sign or ripe tomato"
+            return "Red — may look brownish or very dark to you. Real-world match: \(anchor)."
+        case 20..<45:
+            return "Orange-red — similar to rust or autumn leaves. May blend with browns for you."
+        case 45..<75:
+            return "Orange — like a pumpkin or carrot. May look tan or dull brown to you."
+        case 75..<115:
+            return "Yellow-green — may look similar to yellow or khaki. Think fresh lime or spring grass."
+        case 115..<155:
+            let anchor = l < 0.38 ? "dark forest or pine needles" : "cut grass or fresh leaves"
+            return "Green — may look similar to reds or browns to you. Real-world match: \(anchor)."
+        case 155..<185:
+            return "Teal — leans blue-green. Slightly easier to distinguish than pure green or red."
+        default:
+            return "\(lightnessLabel(l: l).capitalized) warm tone — in the red-green range that can be difficult to distinguish."
         }
     }
 
