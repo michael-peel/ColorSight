@@ -11,10 +11,17 @@ struct ContentView: View {
     @State private var authStatus: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
 
     var body: some View {
-        if !hasCompletedOnboarding {
-            OnboardingView()
-        } else {
-            cameraGate
+        Group {
+            if !hasCompletedOnboarding {
+                OnboardingView()
+            } else {
+                cameraGate
+            }
+        }
+        // Re-check camera permission whenever the app returns to the foreground.
+        // Covers the case where the user went to Settings, granted access, and came back.
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            authStatus = AVCaptureDevice.authorizationStatus(for: .video)
         }
     }
 
