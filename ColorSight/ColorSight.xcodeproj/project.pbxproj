@@ -256,6 +256,7 @@
 				DEVELOPMENT_TEAM = P3G2MZK5K4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "ColorSight needs camera access to identify colors.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "ColorSight reads photos so you can identify colors in them.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -291,6 +292,7 @@
 				DEVELOPMENT_TEAM = P3G2MZK5K4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "ColorSight needs camera access to identify colors.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "ColorSight reads photos so you can identify colors in them.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
