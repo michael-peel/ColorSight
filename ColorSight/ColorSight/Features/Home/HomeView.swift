@@ -347,8 +347,20 @@ private struct MainMenuView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 32)
             }
-            .navigationTitle("ColorSight")
+            // Custom principal item gives the two-tone "ColorSight" wordmark.
+            // .inline mode is required; .large titles don't support custom views.
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 0) {
+                        Text("Color")
+                            .foregroundStyle(.primary)
+                        Text("Sight")
+                            .foregroundStyle(Color.purple)
+                    }
+                    .font(.headline)
+                }
+
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showingSettings = true } label: {
                         Image(systemName: "gearshape.fill")
