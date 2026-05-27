@@ -246,7 +246,6 @@ private extension CVDProfile {
         case .protanopia:    return "Red-Green (Red-type)"
         case .tritanopia:    return "Blue-Yellow"
         case .achromatopsia: return "Full Color Blindness"
-        case .custom:        return "Custom Profile"
         }
     }
 
@@ -263,8 +262,6 @@ private extension CVDProfile {
             return "Blues and greens look alike; yellows can look pink."
         case .achromatopsia:
             return "Little to no color — mostly shades of gray."
-        case .custom:
-            return "Set your own parameters in Settings."
         }
     }
 
@@ -276,7 +273,6 @@ private extension CVDProfile {
         case .protanopia:    return "eye.trianglebadge.exclamationmark"
         case .tritanopia:    return "eye.trianglebadge.exclamationmark"
         case .achromatopsia: return "eye.slash"
-        case .custom:        return "slider.horizontal.3"
         }
     }
 
@@ -302,8 +298,6 @@ private extension CVDProfile {
             // Vivid orange looks gray
             return (Color(red: 1.00, green: 0.40, blue: 0.00),
                     Color(red: 0.55, green: 0.55, blue: 0.55))
-        case .custom:
-            return nil
         }
     }
 }

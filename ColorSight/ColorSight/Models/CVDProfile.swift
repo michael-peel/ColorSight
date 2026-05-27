@@ -8,7 +8,6 @@ enum CVDProfile: String, CaseIterable, Codable {
     case protanopia     // Red deficiency — missing L cones
     case tritanopia     // Blue-yellow — missing S cones
     case achromatopsia  // Full color blindness — rod monochromacy
-    case custom         // User-defined parameters
 
     static let defaultProfile: CVDProfile = .normal
     private static let userDefaultsKey = "cvdProfile"
@@ -34,7 +33,6 @@ enum CVDProfile: String, CaseIterable, Codable {
         case .protanopia:    return "Protanopia (Red)"
         case .tritanopia:    return "Tritanopia (Blue-Yellow)"
         case .achromatopsia: return "Achromatopsia (Full)"
-        case .custom:        return "Custom"
         }
     }
 }

@@ -304,9 +304,6 @@ final class ColorEngine: Sendable {
         case .achromatopsia:
             // No hue — only brightness and texture
             return "\(brightness) shade"
-
-        case .custom:
-            return "\(brightness) \(saturation)\(genericHueLabel(h: hsl.h)) tone"
         }
     }
 

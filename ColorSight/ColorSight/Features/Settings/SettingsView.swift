@@ -154,7 +154,6 @@ private extension CVDProfile {
         case .protanopia:    return "Protanopia"
         case .tritanopia:    return "Tritanopia"
         case .achromatopsia: return "Achromatopsia"
-        case .custom:        return "Custom"
         }
     }
 
@@ -165,7 +164,6 @@ private extension CVDProfile {
         case .protanopia:    return "Red-green (red-type) — reds appear dark"
         case .tritanopia:    return "Blue-yellow — blues and greens look alike"
         case .achromatopsia: return "Full color blindness — mostly shades of gray"
-        case .custom:        return "User-defined parameters"
         }
     }
 
@@ -177,8 +175,6 @@ private extension CVDProfile {
             return "eye.trianglebadge.exclamationmark"
         case .achromatopsia:
             return "eye.slash"
-        case .custom:
-            return "slider.horizontal.3"
         }
     }
 }
