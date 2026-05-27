@@ -33,11 +33,16 @@ struct ContentView: View {
         case .authorized:
             CameraView()
 
-        case .denied, .restricted:
+        case .denied:
+            // User explicitly denied — they can fix it in Settings.
             PermissionDeniedView()
 
+        case .restricted:
+            // Parental controls or MDM — the user cannot grant access themselves.
+            PermissionRestrictedView()
+
         default:
-            // .notDetermined — show a request prompt
+            // .notDetermined — first time asking.
             PermissionRequestView {
                 await requestPermission()
             }
@@ -52,6 +57,7 @@ struct ContentView: View {
 
 // MARK: - Permission screens
 
+/// Shown on first launch before the system dialog appears.
 private struct PermissionRequestView: View {
     let onRequest: () async -> Void
 
@@ -64,7 +70,7 @@ private struct PermissionRequestView: View {
             Text("Camera Access")
                 .font(.title.bold())
 
-            Text("ColorSight needs your camera to identify colors in real time.")
+            Text("ColorSight uses your camera to identify colors in real time. Your camera feed never leaves your device.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 32)
@@ -74,11 +80,20 @@ private struct PermissionRequestView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+
+            Text("A permission prompt will appear — tap Allow.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
         .padding()
     }
 }
 
+/// Shown after the user taps "Don't Allow" on the system dialog, or after
+/// revoking access in Settings. The "Open Settings" button deep-links directly
+/// to ColorSight's settings page where Camera can be toggled back on.
+/// ContentView re-checks the status when the app returns to the foreground,
+/// so no restart is needed after granting access.
 private struct PermissionDeniedView: View {
     var body: some View {
         VStack(spacing: 20) {
@@ -86,10 +101,10 @@ private struct PermissionDeniedView: View {
                 .font(.system(size: 56))
                 .foregroundStyle(.secondary)
 
-            Text("Camera Access Denied")
+            Text("Camera Access Needed")
                 .font(.title2.bold())
 
-            Text("Enable camera access in Settings → Privacy & Security → Camera → ColorSight.")
+            Text("ColorSight needs camera access to identify colors. Tap Open Settings and turn on Camera — the app will resume automatically when you come back.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 32)
@@ -99,7 +114,29 @@ private struct PermissionDeniedView: View {
                     UIApplication.shared.open(url)
                 }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+        }
+        .padding()
+    }
+}
+
+/// Shown when camera access is restricted by parental controls or device management.
+/// The user cannot change this themselves — no "Open Settings" button.
+private struct PermissionRestrictedView: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(.secondary)
+
+            Text("Camera Restricted")
+                .font(.title2.bold())
+
+            Text("Camera access is restricted on this device — this is usually set by parental controls or a device administrator. ColorSight can't be used until the restriction is lifted.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 32)
         }
         .padding()
     }
