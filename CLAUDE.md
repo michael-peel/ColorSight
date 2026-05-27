@@ -213,11 +213,13 @@ Do not gate the app on profile selection. If the user skips, default to `.deuter
 
 ## Developer Account Status
 
-Currently: **Free Apple Developer account**
-- Camera works on free tier ✅
-- TestFlight, CloudKit, App Store: require paid account ($99/year)
-- Device provisioning expires every 7 days on free tier — re-sign when prompted
-- CloudKit sync: implement but gate behind a `#if PAID_TIER` flag until upgrade
+Currently: **Paid Apple Developer account** (upgraded 2026-05-27)
+- Team ID: `P3G2MZK5K4` (same Apple ID as before)
+- Bundle ID: `com.michaelpeel.ColorSight`
+- TestFlight: unlocked ✅
+- CloudKit: unlocked — implement when ready, no `#if PAID_TIER` gate needed
+- App Store: unlocked ✅
+- Device provisioning: no longer expires every 7 days ✅
 
 ---
 
@@ -246,5 +248,6 @@ Currently: **Free Apple Developer account**
 | Date | What was done |
 |------|--------------|
 | 2026-05-21 | Project initialized. GitHub repo created. Xcode project scaffolded. Camera permission screen working on device. First commit pushed. CLAUDE.md added to repo root. |
+| 2026-05-27 | Removed custom CVD profile (unimplemented). Upgraded to paid Apple Developer account. TestFlight setup in progress. |
 
 > Update this table at the end of every working session.
