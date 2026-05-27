@@ -199,7 +199,7 @@ First-launch flow:
 3. Store profile to `UserDefaults` immediately on selection
 4. Proceed to main app
 
-Do not gate the app on profile selection. If the user skips, default to `.deuteranopia` (most common) and surface Settings.
+Do not gate the app on profile selection. If the user skips, default to `.normal` — we have no information about whether they have CVD, so applying the wrong adaptation is worse than none. Surface Settings so they can set a profile anytime.
 
 ---
 

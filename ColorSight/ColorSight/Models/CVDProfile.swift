@@ -9,10 +9,10 @@ enum CVDProfile: String, CaseIterable, Codable {
     case tritanopia     // Blue-yellow — missing S cones
     case achromatopsia  // Full color blindness — rod monochromacy
 
-    // Default to deuteranopia (most common CVD, ~6% of males).
-    // Used when the user skips onboarding — better to apply some adaptation
-    // than none, since this app is specifically for colorblind users.
-    static let defaultProfile: CVDProfile = .deuteranopia
+    // Default to normal vision when the user skips onboarding.
+    // We have no information about whether they have CVD, so no adaptation
+    // is safer than applying the wrong one.
+    static let defaultProfile: CVDProfile = .normal
     private static let userDefaultsKey = "cvdProfile"
 
     /// Loads the saved profile, or returns the default.
