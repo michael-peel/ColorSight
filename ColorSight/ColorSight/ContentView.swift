@@ -1,28 +1,19 @@
 import SwiftUI
 import AVFoundation
 
-/// Root view — gates on onboarding completion, then on camera permission.
+/// Root view — gates on camera permission, then routes to HomeView.
+/// First-run CVD profile selection is handled inside HomeView itself.
 struct ContentView: View {
-
-    /// Observed directly from UserDefaults; flips to true when OnboardingViewModel
-    /// calls UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding").
-    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     @State private var authStatus: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
 
     var body: some View {
-        Group {
-            if !hasCompletedOnboarding {
-                OnboardingView()
-            } else {
-                cameraGate
+        cameraGate
+            // Re-check camera permission whenever the app returns to the foreground.
+            // Covers the case where the user went to Settings, granted access, and came back.
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+                authStatus = AVCaptureDevice.authorizationStatus(for: .video)
             }
-        }
-        // Re-check camera permission whenever the app returns to the foreground.
-        // Covers the case where the user went to Settings, granted access, and came back.
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-            authStatus = AVCaptureDevice.authorizationStatus(for: .video)
-        }
     }
 
     // MARK: - Camera permission gate

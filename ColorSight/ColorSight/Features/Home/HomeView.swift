@@ -1,31 +1,61 @@
 import SwiftUI
 import SwiftData
 
-// MARK: - HomeView (root container after onboarding)
+// MARK: - HomeView (root container after camera permission)
 //
-// Two-screen flow managed by a single state flag:
-//   • Welcome screen  — logo + "Get Started" button
-//   • Main menu       — Camera (primary), Eyedropper, History, Settings
+// Three-stage flow managed by a single enum:
 //
-// The transition mirrors the onboarding page-turn pattern.
+//   • .welcome       — logo + "Get Started" button (shown every launch)
+//   • .profilePicker — CVD profile selection (first launch only)
+//   • .menu          — Camera / Eyedropper / History / Settings
+//
+// `hasCompletedOnboarding` gates whether the first "Get Started" tap goes to
+// the profile picker or straight to the menu.
 
 struct HomeView: View {
-    @State private var showingMenu = false
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+
+    private enum Stage { case welcome, profilePicker, menu }
+    @State private var stage: Stage = .welcome
+    @State private var pendingProfile: CVDProfile? = nil
 
     var body: some View {
         Group {
-            if showingMenu {
-                MainMenuView()
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-            } else {
+            switch stage {
+
+            case .welcome:
                 WelcomeScreen {
                     withAnimation(.easeInOut(duration: 0.35)) {
-                        showingMenu = true
+                        stage = hasCompletedOnboarding ? .menu : .profilePicker
                     }
                 }
                 .transition(.move(edge: .leading).combined(with: .opacity))
+
+            case .profilePicker:
+                ProfilePickerScreen(
+                    pending: $pendingProfile,
+                    onConfirm: {
+                        finishOnboarding()
+                        withAnimation(.easeInOut(duration: 0.35)) { stage = .menu }
+                    },
+                    onSkip: {
+                        finishOnboarding()
+                        withAnimation(.easeInOut(duration: 0.35)) { stage = .menu }
+                    }
+                )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+
+            case .menu:
+                MainMenuView()
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
+    }
+
+    private func finishOnboarding() {
+        // Persist whichever profile the user chose (or the default on skip).
+        (pendingProfile ?? CVDProfile.defaultProfile).save()
+        hasCompletedOnboarding = true
     }
 }
 
@@ -42,7 +72,7 @@ private struct WelcomeScreen: View {
             ColorSightLogo(size: 160)
                 .padding(.bottom, 20)
 
-            // Two-tone word-mark: "Color" dark, "Sight" purple
+            // Two-tone wordmark: "Color" dark, "Sight" purple
             HStack(spacing: 0) {
                 Text("Color")
                     .foregroundStyle(.primary)
@@ -83,6 +113,202 @@ private struct WelcomeScreen: View {
     }
 }
 
+// MARK: - Profile picker screen (first launch only)
+
+private struct ProfilePickerScreen: View {
+    @Binding var pending: CVDProfile?
+    let onConfirm: () -> Void
+    let onSkip:    () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            VStack(spacing: 10) {
+                Text("How do you see color?")
+                    .font(.title.bold())
+                    .multilineTextAlignment(.center)
+
+                Text("ColorSight adapts its descriptions for you.\nPick the closest match — you can change it anytime in Settings.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+            .padding(.top, 52)
+            .padding(.bottom, 24)
+
+            // Profile cards
+            ScrollView {
+                VStack(spacing: 12) {
+                    ForEach(CVDProfile.allCases, id: \.self) { profile in
+                        CVDProfileCard(
+                            profile:    profile,
+                            isSelected: pending == profile,
+                            onSelect:   { pending = profile }
+                        )
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+            }
+
+            Divider()
+
+            // Bottom actions
+            VStack(spacing: 14) {
+                Button(action: onConfirm) {
+                    Text("Continue")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(pending == nil)
+                .padding(.horizontal, 32)
+
+                Button(action: onSkip) {
+                    Text("Skip for now")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.bottom, 32)
+            }
+            .padding(.top, 16)
+        }
+    }
+}
+
+// MARK: - Profile card
+
+private struct CVDProfileCard: View {
+    let profile:    CVDProfile
+    let isSelected: Bool
+    let onSelect:   () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 14) {
+                // Icon
+                Image(systemName: profile.onboardingIcon)
+                    .font(.title3)
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        Circle()
+                            .fill(isSelected
+                                  ? Color.accentColor.opacity(0.12)
+                                  : Color(.tertiarySystemBackground))
+                    )
+
+                // Text
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(profile.onboardingTitle)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text(profile.experienceDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 8)
+
+                // Confusion swatch pair
+                if let (c1, c2) = profile.confusionColors {
+                    VStack(spacing: 2) {
+                        HStack(spacing: -8) {
+                            Circle()
+                                .fill(c1)
+                                .frame(width: 22, height: 22)
+                                .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
+                            Circle()
+                                .fill(c2)
+                                .frame(width: 22, height: 22)
+                                .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
+                        }
+                        Text("look similar")
+                            .font(.system(size: 8))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+
+                // Selection indicator
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.primary.opacity(0.2))
+                    .font(.title3)
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(isSelected
+                          ? Color.accentColor.opacity(0.07)
+                          : Color(.secondarySystemBackground))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.15), value: isSelected)
+        .accessibilityLabel("\(profile.onboardingTitle). \(profile.experienceDescription)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+// MARK: - CVDProfile display properties (used by the picker above)
+
+private extension CVDProfile {
+    var onboardingTitle: String {
+        switch self {
+        case .normal:        return "No Color Deficiency"
+        case .deuteranopia:  return "Red-Green (Green-type)"
+        case .protanopia:    return "Red-Green (Red-type)"
+        case .tritanopia:    return "Blue-Yellow"
+        case .achromatopsia: return "Full Color Blindness"
+        }
+    }
+
+    var experienceDescription: String {
+        switch self {
+        case .normal:        return "Colors appear as most people see them."
+        case .deuteranopia:  return "Reds and greens can look brownish or the same."
+        case .protanopia:    return "Reds look very dark; hard to separate from brown or black."
+        case .tritanopia:    return "Blues and greens look alike; yellows can look pink."
+        case .achromatopsia: return "Little to no color — mostly shades of gray."
+        }
+    }
+
+    var onboardingIcon: String {
+        switch self {
+        case .normal:        return "eye"
+        case .deuteranopia,
+             .protanopia,
+             .tritanopia:    return "eye.trianglebadge.exclamationmark"
+        case .achromatopsia: return "eye.slash"
+        }
+    }
+
+    var confusionColors: (Color, Color)? {
+        switch self {
+        case .normal:        return nil
+        case .deuteranopia:
+            return (Color(red: 0.80, green: 0.20, blue: 0.00),
+                    Color(red: 0.42, green: 0.56, blue: 0.00))
+        case .protanopia:
+            return (Color(red: 0.80, green: 0.20, blue: 0.00),
+                    Color(red: 0.36, green: 0.22, blue: 0.00))
+        case .tritanopia:
+            return (Color(red: 0.00, green: 0.33, blue: 0.80),
+                    Color(red: 0.00, green: 0.53, blue: 0.30))
+        case .achromatopsia:
+            return (Color(red: 1.00, green: 0.40, blue: 0.00),
+                    Color(red: 0.55, green: 0.55, blue: 0.55))
+        }
+    }
+}
+
 // MARK: - Main menu
 
 private struct MainMenuView: View {
@@ -95,7 +321,6 @@ private struct MainMenuView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 12) {
-                    // Camera — primary feature, larger card
                     FeatureCard(
                         icon:        "camera.fill",
                         title:       "Camera",
@@ -103,8 +328,6 @@ private struct MainMenuView: View {
                         isPrimary:   true,
                         action:      { showingCamera = true }
                     )
-
-                    // Eyedropper — full-width so text never hyphenates
                     FeatureCard(
                         icon:        "eyedropper.halffull",
                         title:       "Eyedropper",
@@ -112,8 +335,6 @@ private struct MainMenuView: View {
                         isPrimary:   false,
                         action:      { showingEyedropper = true }
                     )
-
-                    // History — full-width
                     FeatureCard(
                         icon:        "clock.arrow.circlepath",
                         title:       "History",
@@ -156,19 +377,16 @@ private struct FeatureCard: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 16) {
-                // Icon badge
                 Image(systemName: icon)
                     .font(isPrimary ? .title : .title2)
                     .foregroundStyle(Color.accentColor)
                     .frame(width: isPrimary ? 52 : 44, height: isPrimary ? 52 : 44)
                     .background(Color.accentColor.opacity(0.1), in: Circle())
 
-                // Text block — gets all remaining width, so long words never wrap
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
                         .font(isPrimary ? .title3.bold() : .headline)
                         .foregroundStyle(.primary)
-
                     Text(description)
                         .font(isPrimary ? .subheadline : .caption)
                         .foregroundStyle(.secondary)
@@ -194,20 +412,19 @@ private struct FeatureCard: View {
 
 // MARK: - ColorSight logo
 //
-// A color-wheel "C" arc (11 segments, 270° span, gap upper-right)
-// with a dark eye/pupil in the centre — matching the app icon.
+// A colour-wheel "C" arc (11 segments, 270° span) with a dark eye/pupil.
 //
-// Coordinate convention used here (for clarity):
+// Coordinate convention (used only within this view):
 //   • 0° = 12 o'clock, positive = clockwise
-//   • Gap runs from 30° (top of C, yellow ends) to 120° (bottom of C, cyan starts)
-//   • Arc runs from 120° clockwise through 180°, 270°, 0°, back to 30° = 270°
+//   • Gap from 45° (top-right) → 135° (bottom-right) — centred at 90° (right)
+//   • Arc from 135° → 45° clockwise = 270° — this forms a proper "C"
 
 private struct ColorSightLogo: View {
     var size: CGFloat = 160
 
-    // 11 segments: colours arranged from bottom-of-C (cyan) clockwise to top-of-C (yellow)
+    // 11 segments: cyan → … → yellow, going clockwise from the bottom of the C
     private let segmentColors: [Color] = [
-        Color(red: 0.12, green: 0.78, blue: 0.92),   // cyan-blue  (arc start ~120°)
+        Color(red: 0.12, green: 0.78, blue: 0.92),   // cyan-blue  (arc start ~135°)
         Color(red: 0.18, green: 0.58, blue: 0.96),   // blue
         Color(red: 0.35, green: 0.40, blue: 0.93),   // blue-violet
         Color(red: 0.53, green: 0.25, blue: 0.88),   // violet
@@ -217,7 +434,7 @@ private struct ColorSightLogo: View {
         Color(red: 0.95, green: 0.32, blue: 0.05),   // red-orange
         Color(red: 0.97, green: 0.55, blue: 0.03),   // orange
         Color(red: 0.97, green: 0.73, blue: 0.03),   // yellow-orange
-        Color(red: 0.97, green: 0.89, blue: 0.08),   // yellow     (arc end ~30°)
+        Color(red: 0.97, green: 0.89, blue: 0.08),   // yellow     (arc end ~45°)
     ]
 
     var body: some View {
@@ -228,28 +445,29 @@ private struct ColorSightLogo: View {
             let outerR: CGFloat = size * 0.47
             let innerR: CGFloat = size * 0.29
 
-            let arcStartDeg: Double = 120   // where the arc begins (clockwise from top)
-            let arcSpan:     Double = 270   // total degrees covered
+            // Arc begins at 135° (lower-right, bottom arm of C) and runs 270° clockwise
+            // to 45° (upper-right, top arm of C). Gap = 45°→135° = right side.
+            let arcStartDeg: Double = 135
+            let arcSpan:     Double = 270
             let n = segmentColors.count
-            let segSpan   = arcSpan / Double(n)
-            let gapBetween: Double = 1.5    // degrees of blank space between segments
+            let segSpan     = arcSpan / Double(n)
+            let gapBetween: Double = 1.5   // degrees of blank space between segments
 
             for i in 0..<n {
-                let segStart = arcStartDeg + Double(i) * segSpan + gapBetween / 2
-                let segEnd   = arcStartDeg + Double(i + 1) * segSpan - gapBetween / 2
+                let segStart = arcStartDeg + Double(i)       * segSpan + gapBetween / 2
+                let segEnd   = arcStartDeg + Double(i + 1)   * segSpan - gapBetween / 2
 
-                // addArc uses standard math angles (0° = right, counterclockwise positive),
-                // but in UIKit's flipped Y coordinate system clockwise:false → clockwise on screen.
-                // Convert "degrees clockwise from top" → "degrees from right" by subtracting 90.
+                // addArc uses math angles (0° = right, positive = counterclockwise) but in
+                // UIKit's flipped Y system clockwise:false means clockwise on screen.
+                // Convert "degrees clockwise from top" → "degrees from right" by -90°.
                 let aStart = Angle(degrees: segStart - 90)
                 let aEnd   = Angle(degrees: segEnd   - 90)
 
-                // Build the donut-segment path: outer arc + inner arc back
                 var path = Path()
                 path.addArc(center: center, radius: outerR,
                             startAngle: aStart, endAngle: aEnd, clockwise: false)
                 path.addArc(center: center, radius: innerR,
-                            startAngle: aEnd, endAngle: aStart, clockwise: true)
+                            startAngle: aEnd,   endAngle: aStart, clockwise: true)
                 path.closeSubpath()
                 ctx.fill(path, with: .color(segmentColors[i]))
             }
@@ -268,7 +486,7 @@ private struct ColorSightLogo: View {
                 .fill(Color(red: 0.09, green: 0.10, blue: 0.16))
                 .frame(width: size * 0.37, height: size * 0.37)
 
-            // White pupil highlight (upper-left offset, like a light reflection)
+            // White pupil highlight (upper-left, like a light reflection)
             Circle()
                 .fill(.white)
                 .frame(width: size * 0.10, height: size * 0.10)
