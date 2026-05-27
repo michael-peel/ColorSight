@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        ColorSight Privacy Manifest
+        Required by Apple for App Store submission when using "required reason APIs."
+
+        API usage:
+          NSUserDefaults — stores CVD profile, haptics preference, voice preference,
+          region sampling toggle, and onboarding completion flag. No data leaves the device.
+
+        Data collection:
+          None. ColorSight processes camera frames and photos entirely on-device.
+          No analytics, no advertising, no crash reporters, no third-party SDKs.
+    -->
+
+    <!-- Required-reason APIs -->
+    <key>NSPrivacyAccessedAPITypes</key>
+    <array>
+        <dict>
+            <!-- NSUserDefaults: used to persist CVD profile and user preferences -->
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <!-- CA92.1: Read/write defaults to provide app features -->
+                <string>CA92.1</string>
+            </array>
+        </dict>
+    </array>
+
+    <!-- No data collected -->
+    <key>NSPrivacyCollectedDataTypes</key>
+    <array/>
+
+    <!-- No tracking -->
+    <key>NSPrivacyTracking</key>
+    <false/>
+    <key>NSPrivacyTrackingDomains</key>
+    <array/>
+</dict>
+</plist>

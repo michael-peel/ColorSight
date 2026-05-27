@@ -35,6 +35,14 @@ struct EyedropperView: View {
             guard let newItem else { return }
             Task { await viewModel.loadImage(from: newItem) }
         }
+        // Save the final identified color to history when the user closes the eyedropper.
+        // Doing it here (once on dismiss) rather than on every finger lift means the user
+        // can freely drag around without flooding history with intermediate samples.
+        .onDisappear {
+            if let color = viewModel.identifiedColor {
+                modelContext.insert(ColorSwatch(from: color, source: "eyedropper"))
+            }
+        }
         .statusBar(hidden: true)
     }
 
@@ -129,10 +137,9 @@ struct EyedropperView: View {
                         }
                         // Announce the final color once the user lifts their finger.
                         viewModel.announceCurrentColor()
-                        // Save to history.
-                        if let color = viewModel.identifiedColor {
-                            modelContext.insert(ColorSwatch(from: color, source: "eyedropper"))
-                        }
+                        // Note: history save happens on dismiss, not on every finger lift.
+                        // That way the user can freely sample around and only the final
+                        // color they settle on gets added to history.
                     }
             )
         }

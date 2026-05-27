@@ -144,21 +144,18 @@ final class ColorEngine: Sendable {
     /// Identifies the closest named color for the given 8-bit RGB values.
     /// Safe to call from any thread.
     func identify(r: UInt8, g: UInt8, b: UInt8, profile: CVDProfile = .load()) -> IdentifiedColor {
-        let queryLAB = Self.rgbToLAB(r: Int(r), g: Int(g), b: Int(b))
+        let queryLAB   = Self.rgbToLAB(r: Int(r), g: Int(g), b: Int(b))
         let nearest    = nearestEntry(to: queryLAB)
         let simpleName = Self.nearestSimpleName(to: queryLAB)
 
         let hsl = Self.rgbToHSL(r: Int(r), g: Int(g), b: Int(b))
         let hex = String(format: "#%02X%02X%02X", r, g, b)
-        let cvdDesc = generateCVDDescription(
-            name: nearest.name,
-            hsl: hsl,
-            profile: profile
-        )
+        let name = nearest?.name ?? simpleName   // fallback if DB somehow empty
+        let cvdDesc = generateCVDDescription(name: name, hsl: hsl, profile: profile)
 
         return IdentifiedColor(
             simpleName: simpleName,
-            name: nearest.name,
+            name: name,
             hex: hex,
             rgb: .init(r: Int(r), g: Int(g), b: Int(b)),
             hsl: hsl,
@@ -185,15 +182,16 @@ final class ColorEngine: Sendable {
 
     // MARK: - Nearest-neighbor search
 
-    private func nearestEntry(to query: LAB) -> ColorEntry {
+    private func nearestEntry(to query: LAB) -> ColorEntry? {
         // Linear scan — ~200 entries takes < 0.05ms. No spatial index needed for v1.
-        var bestEntry = database[0]
-        var bestDist = deltaE(query, database[0].lab)
+        guard let first = database.first else { return nil }
+        var bestEntry = first
+        var bestDist  = deltaE(query, first.lab)
 
         for entry in database.dropFirst() {
             let d = deltaE(query, entry.lab)
             if d < bestDist {
-                bestDist = d
+                bestDist  = d
                 bestEntry = entry
             }
         }
