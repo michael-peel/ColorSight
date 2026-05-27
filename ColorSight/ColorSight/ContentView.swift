@@ -31,7 +31,7 @@ struct ContentView: View {
     private var cameraGate: some View {
         switch authStatus {
         case .authorized:
-            CameraView()
+            HomeView()
 
         case .denied:
             // User explicitly denied — they can fix it in Settings.

@@ -3,6 +3,7 @@ import SwiftData
 
 struct CameraView: View {
 
+    @Environment(\.dismiss)      private var dismiss
     @Environment(\.modelContext) private var modelContext
 
     @State private var viewModel         = CameraViewModel()
@@ -60,8 +61,21 @@ struct CameraView: View {
             // MARK: - Top bar (eyedropper left, settings right)
             VStack {
                 HStack {
-                    // Eyedropper + Torch — top-left
+                    // Home + Eyedropper + Torch — top-left
                     HStack(spacing: 10) {
+                        // Dismiss camera and return to the home screen
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "chevron.down")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .padding(10)
+                                .background(.ultraThinMaterial, in: Circle())
+                                .shadow(color: .black.opacity(0.3), radius: 4)
+                        }
+                        .accessibilityLabel("Back to Home")
+
                         Button {
                             showingEyedropper = true
                         } label: {
