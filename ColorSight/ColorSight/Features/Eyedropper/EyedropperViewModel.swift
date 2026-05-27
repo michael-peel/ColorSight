@@ -22,16 +22,20 @@ final class EyedropperViewModel {
 
     // MARK: - Photo loading
 
-    /// Load, normalise orientation, and sample the centre pixel.
+    /// Load, normalise orientation, scale to display size, and sample the centre pixel.
     func loadImage(from item: PhotosPickerItem) async {
         isLoadingImage = true
         defer { isLoadingImage = false }
 
-        guard let data = try? await item.loadTransferable(type: Data.self),
-              let raw = UIImage(data: data)
-        else { return }
+        // loadTransferable can throw on iOS 26 if NSPhotoLibraryUsageDescription
+        // is missing or if the picker result is unavailable — use do/catch so we
+        // see the error rather than silently returning.
+        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+        guard let raw = UIImage(data: data) else { return }
 
-        displayImage = raw.orientationNormalised()
+        // Scale + fix orientation in one render pass.
+        // Avoids holding two copies of a potentially 48MP image in memory.
+        displayImage = raw.scaledForDisplay()
         sampleColor(atNormalized: CGPoint(x: 0.5, y: 0.5))
     }
 
@@ -59,11 +63,21 @@ final class EyedropperViewModel {
 
 extension UIImage {
 
-    /// Returns a copy of the image with `.up` orientation so pixel coordinates are predictable.
-    func orientationNormalised() -> UIImage {
-        guard imageOrientation != .up else { return self }
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { _ in draw(at: .zero) }
+    /// Returns the image scaled to fit within `maxDimension` points and with orientation
+    /// corrected to `.up` — all in a single render pass.
+    ///
+    /// Doing orientation + scale together avoids holding two full-resolution bitmaps
+    /// in memory simultaneously, which can OOM on 48MP ProRAW images.
+    func scaledForDisplay(maxDimension: CGFloat = 3_000) -> UIImage {
+        let scale = min(maxDimension / max(size.width, size.height), 1.0)
+        let target = CGSize(width: (size.width  * scale).rounded(),
+                            height: (size.height * scale).rounded())
+        // UIGraphicsImageRenderer always produces a `.up` image, so this also
+        // fixes orientation without a separate normalisation step.
+        let renderer = UIGraphicsImageRenderer(size: target)
+        return renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: target))
+        }
     }
 
     /// Reads the RGBA pixel at a normalised point (0–1) and returns (r, g, b).
