@@ -77,17 +77,24 @@ extension UIImage {
 
         guard let crop = cg.cropping(to: CGRect(x: cx, y: cy, width: 1, height: 1)) else { return nil }
 
+        // Use withUnsafeMutableBytes so the buffer is guaranteed pinned in memory
+        // for the entire lifetime of the CGContext — including the ctx.draw() call.
+        // Passing &pixel directly only pins it for the CGContext.init() call, making
+        // the pointer dangle by the time ctx.draw() runs (crash on iOS 26).
         var pixel = [UInt8](repeating: 0, count: 4)
         let space = CGColorSpaceCreateDeviceRGB()
-        guard let ctx = CGContext(
-            data: &pixel,
-            width: 1, height: 1,
-            bitsPerComponent: 8, bytesPerRow: 4,
-            space: space,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return nil }
 
-        ctx.draw(crop, in: CGRect(x: 0, y: 0, width: 1, height: 1))
-        return (pixel[0], pixel[1], pixel[2])
+        return pixel.withUnsafeMutableBytes { ptr in
+            guard let ctx = CGContext(
+                data: ptr.baseAddress,
+                width: 1, height: 1,
+                bitsPerComponent: 8, bytesPerRow: 4,
+                space: space,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return nil }
+
+            ctx.draw(crop, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+            return (ptr[0], ptr[1], ptr[2])
+        }
     }
 }
