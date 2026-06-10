@@ -13,6 +13,10 @@ enum HueFamily: String, CaseIterable, Identifiable {
 
     var displayName: String { rawValue.capitalized }
 
+    /// Integer index passed to the Metal compute kernel's HueIsolationParams.family field.
+    /// Must match the `case` ordering in the Metal shader's matchesFamily() switch.
+    var metalIndex: Int { HueFamily.allCases.firstIndex(of: self)! }
+
     /// Reference swatch shown in the pill selector.
     /// Chosen for maximum saturation/brightness to aid legibility across CVD types;
     /// the text label is the primary affordance.
@@ -47,7 +51,7 @@ enum HueFamily: String, CaseIterable, Identifiable {
     /// The ranges are mutually exclusive — no pixel can satisfy both.
     ///
     /// Called per-pixel on a background thread; uses Float arithmetic throughout.
-    func matches(r: UInt8, g: UInt8, b: UInt8) -> Bool {
+    nonisolated func matches(r: UInt8, g: UInt8, b: UInt8) -> Bool {
         let rf = Float(r) / 255.0
         let gf = Float(g) / 255.0
         let bf = Float(b) / 255.0

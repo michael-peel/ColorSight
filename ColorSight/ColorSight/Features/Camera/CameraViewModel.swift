@@ -20,6 +20,8 @@ private final class CameraThreadState: @unchecked Sendable {
     nonisolated(unsafe) var selectedHueFamily    = HueFamily.red
     // Allocated lazily on first isolated frame; reused for the session lifetime
     nonisolated(unsafe) var isolationOutputBuffer: CVPixelBuffer?   // sampleQueue only
+    // Counts frames seen while isolation mode is active; used for even/odd skip logic
+    nonisolated(unsafe) var isolationFrameCount: UInt64 = 0         // sampleQueue only
     // @unchecked Sendable service; safe to call from sampleQueue
     let hueIsolationService = HueIsolationService()
 }
@@ -251,21 +253,32 @@ extension CameraViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
         }
 
         // Hue isolation filter — applies color-splash effect when mode is active.
-        // The output buffer is created lazily on the first active frame and reused
-        // for the session lifetime to avoid per-frame allocation.
+        // Every other frame is skipped (previous result stays on screen) to halve
+        // the processing rate while keeping the effect visually smooth.
         if threadState.isHueIsolationActive {
-            if threadState.isolationOutputBuffer == nil {
-                threadState.isolationOutputBuffer =
-                    HueIsolationService.makeOutputBuffer(matchingFormat: pixelBuffer)
-            }
-            if let outBuffer = threadState.isolationOutputBuffer {
-                let filteredImage = threadState.hueIsolationService.process(
-                    input:  pixelBuffer,
-                    family: threadState.selectedHueFamily,
-                    output: outBuffer
-                )
-                DispatchQueue.main.async { [weak self] in
-                    self?.isolationFilteredImage = filteredImage
+            threadState.isolationFrameCount &+= 1
+
+            // Only process even-numbered frames; odd frames reuse the last UIImage.
+            if threadState.isolationFrameCount.isMultiple(of: 2) {
+                if threadState.isolationOutputBuffer == nil {
+                    threadState.isolationOutputBuffer =
+                        HueIsolationService.makeOutputBuffer(matchingFormat: pixelBuffer)
+                }
+                if let outBuffer = threadState.isolationOutputBuffer {
+                    let t0 = CACurrentMediaTime()
+                    let filteredImage = threadState.hueIsolationService.process(
+                        input:  pixelBuffer,
+                        family: threadState.selectedHueFamily,
+                        output: outBuffer
+                    )
+                    let ms = (CACurrentMediaTime() - t0) * 1000
+                    // Print timing every 30 processed frames (~6 s at 10 fps effective rate).
+                    if threadState.isolationFrameCount.isMultiple(of: 60) {
+                        print("[HueIsolation] \(String(format: "%.1f", ms)) ms/frame")
+                    }
+                    DispatchQueue.main.async { [weak self] in
+                        self?.isolationFilteredImage = filteredImage
+                    }
                 }
             }
         }

@@ -13,6 +13,8 @@ struct HueIsolationOverlayView: View {
         Image(uiImage: image)
             .resizable()
             .scaledToFill()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()           // crop overflow to exactly match the preview layer's bounds
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
