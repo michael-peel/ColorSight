@@ -1,5 +1,6 @@
 @preconcurrency import AVFoundation
 import Observation
+import UIKit
 
 // MARK: - Background-queue mutable state
 //
@@ -13,6 +14,14 @@ private final class CameraThreadState: @unchecked Sendable {
     nonisolated(unsafe) var isConfigured   = false               // sessionQueue only
     nonisolated(unsafe) var lastSampleTime: Double = 0           // sampleQueue only
     nonisolated(unsafe) var captureDevice: AVCaptureDevice?      // sessionQueue only
+
+    // Hue isolation — written on MainActor, read on sampleQueue
+    nonisolated(unsafe) var isHueIsolationActive = false
+    nonisolated(unsafe) var selectedHueFamily    = HueFamily.red
+    // Allocated lazily on first isolated frame; reused for the session lifetime
+    nonisolated(unsafe) var isolationOutputBuffer: CVPixelBuffer?   // sampleQueue only
+    // @unchecked Sendable service; safe to call from sampleQueue
+    let hueIsolationService = HueIsolationService()
 }
 
 // MARK: - ViewModel
@@ -44,6 +53,22 @@ final class CameraViewModel: NSObject {
     }
     var sessionIsRunning = false
     var errorMessage: String?
+
+    // MARK: - Hue Isolation state
+
+    var isHueIsolationActive = false {
+        didSet {
+            threadState.isHueIsolationActive = isHueIsolationActive
+            // Drop the stale frame immediately so the overlay disappears on toggle-off.
+            if !isHueIsolationActive { isolationFilteredImage = nil }
+        }
+    }
+    var selectedHueFamily: HueFamily = .red {
+        didSet { threadState.selectedHueFamily = selectedHueFamily }
+    }
+    /// Processed frame produced by HueIsolationService on sampleQueue, displayed by
+    /// HueIsolationOverlayView. Nil when isolation mode is off.
+    var isolationFilteredImage: UIImage?
 
     // MARK: - Internals
 
@@ -223,6 +248,26 @@ extension CameraViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self, !self.isFrozen else { return }
             self.identifiedColor = self.colorEngine.identify(r: r, g: g, b: b)
+        }
+
+        // Hue isolation filter — applies color-splash effect when mode is active.
+        // The output buffer is created lazily on the first active frame and reused
+        // for the session lifetime to avoid per-frame allocation.
+        if threadState.isHueIsolationActive {
+            if threadState.isolationOutputBuffer == nil {
+                threadState.isolationOutputBuffer =
+                    HueIsolationService.makeOutputBuffer(matchingFormat: pixelBuffer)
+            }
+            if let outBuffer = threadState.isolationOutputBuffer {
+                let filteredImage = threadState.hueIsolationService.process(
+                    input:  pixelBuffer,
+                    family: threadState.selectedHueFamily,
+                    output: outBuffer
+                )
+                DispatchQueue.main.async { [weak self] in
+                    self?.isolationFilteredImage = filteredImage
+                }
+            }
         }
     }
 

@@ -32,6 +32,14 @@ struct CameraView: View {
             // MARK: - Live preview (full screen)
             CameraPreviewView(session: viewModel.session)
 
+            // MARK: - Hue isolation overlay
+            // Sits above the raw preview so the color-splash effect is visible,
+            // but below the crosshair and all controls.
+            if viewModel.isHueIsolationActive, let img = viewModel.isolationFilteredImage {
+                HueIsolationOverlayView(image: img)
+                    .transition(.opacity)
+            }
+
             // MARK: - Center crosshair
             // Because the ZStack ignores safe areas, this is centered on the
             // true screen center — matching the camera's sampled pixel exactly.
@@ -51,12 +59,17 @@ struct CameraView: View {
             }
 
             // MARK: - Bottom HUD
-            VStack {
+            VStack(spacing: 8) {
                 Spacer()
+                if viewModel.isHueIsolationActive {
+                    HueFamilyPickerView(selectedFamily: Bindable(viewModel).selectedHueFamily)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
                 colorInfoCard
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 40 + safeInsets.bottom)
             }
+            .padding(.bottom, 40 + safeInsets.bottom)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isHueIsolationActive)
 
             // MARK: - Top bar (eyedropper left, settings right)
             VStack {
@@ -100,6 +113,35 @@ struct CameraView: View {
                                 .shadow(color: .black.opacity(0.3), radius: 4)
                         }
                         .animation(.easeInOut(duration: 0.15), value: viewModel.isTorchOn)
+
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                viewModel.isHueIsolationActive.toggle()
+                            }
+                        } label: {
+                            Image(systemName: "paintpalette.fill")
+                                .font(.title3)
+                                .foregroundStyle(
+                                    viewModel.isHueIsolationActive
+                                        ? viewModel.selectedHueFamily.swatchColor
+                                        : Color.white
+                                )
+                                .padding(10)
+                                .background(.ultraThinMaterial, in: Circle())
+                                .overlay(
+                                    Circle().strokeBorder(
+                                        viewModel.isHueIsolationActive
+                                            ? viewModel.selectedHueFamily.swatchColor.opacity(0.85)
+                                            : Color.clear,
+                                        lineWidth: 1.5
+                                    )
+                                )
+                                .shadow(color: .black.opacity(0.3), radius: 4)
+                        }
+                        .accessibilityLabel("Hue Isolation Mode")
+                        .accessibilityValue(viewModel.isHueIsolationActive ? "On" : "Off")
+                        .animation(.easeInOut(duration: 0.2), value: viewModel.isHueIsolationActive)
+                        .animation(.easeInOut(duration: 0.2), value: viewModel.selectedHueFamily)
                     }
                     .padding(.leading, 16)
 
