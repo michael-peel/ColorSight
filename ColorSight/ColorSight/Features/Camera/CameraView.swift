@@ -475,68 +475,109 @@ private struct ButtonFramesKey: PreferenceKey {
     }
 }
 
-// MARK: - First-launch tooltip overlay
+// MARK: - Step-by-step coach mark overlay
 
 private struct CameraTooltipOverlay: View {
     let buttonFrames: [TooltipButtonID: CGRect]
-    let onDismiss: () -> Void
+    let onDismiss:    () -> Void
+
+    @State private var currentStep = 0
+
+    private let steps: [(id: TooltipButtonID, label: String)] = [
+        (.chevron,    "Go back to the home screen"),
+        (.eyedropper, "Open a photo to sample colors"),
+        (.torch,      "Toggle the flashlight"),
+        (.palette,    "Hue Isolation — highlight one color, gray out the rest"),
+    ]
+
+    private var isLastStep:   Bool            { currentStep == steps.count - 1 }
+    private var currentID:    TooltipButtonID { steps[currentStep].id }
+    private var currentFrame: CGRect?         { buttonFrames[currentID] }
+
+    private func labelX(for frame: CGRect) -> CGFloat {
+        let halfPill: CGFloat = 110
+        let margin:   CGFloat = 16
+        let screenW = UIScreen.main.bounds.width
+        return max(halfPill + margin, min(frame.midX, screenW - halfPill - margin))
+    }
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.65)
-                .ignoresSafeArea()
+            // Dim overlay — full screen at 0.7, clear ellipse cut out around focused button
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if let frame = currentFrame {
+                    Ellipse()
+                        .frame(width: frame.width + 28, height: frame.height + 28)
+                        .position(x: frame.midX, y: frame.midY)
+                        .blendMode(.destinationOut)
+                }
+            }
+            .compositingGroup()
+            .opacity(0.7)
+            .ignoresSafeArea()
 
-            if let f = buttonFrames[.chevron] {
-                tooltipItem(label: "Collapse toolbar", frame: f, purpleGlow: false)
-            }
-            if let f = buttonFrames[.eyedropper] {
-                tooltipItem(label: "Open a photo to\nsample colors", frame: f, purpleGlow: false)
-            }
-            if let f = buttonFrames[.torch] {
-                tooltipItem(label: "Toggle flashlight", frame: f, purpleGlow: false)
-            }
-            if let f = buttonFrames[.palette] {
-                tooltipItem(
-                    label: "Hue Isolation —\nhighlight one color,\ngray out the rest",
-                    frame: f,
-                    purpleGlow: true
-                )
+            // Pulsing ring — stays in place, fades in/out
+            if let frame = currentFrame {
+                PulsingRing(frame: frame)
+                    .id(currentStep)
             }
 
+            // Label pill below the focused button
+            if let frame = currentFrame {
+                Text(steps[currentStep].label)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: 220)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                    .position(x: labelX(for: frame), y: frame.maxY + 48)
+            }
+
+            // Bottom capsule: Next → for steps 0–2, Got it ✓ for step 3
             VStack {
                 Spacer()
-                Text("Tap anywhere to dismiss")
-                    .font(.caption2)
-                    .foregroundStyle(.gray)
-                    .padding(.bottom, 52)
+                Button {
+                    if isLastStep {
+                        onDismiss()
+                    } else {
+                        withAnimation(.easeInOut(duration: 0.2)) { currentStep += 1 }
+                    }
+                } label: {
+                    Text(isLastStep ? "Got it ✓" : "Next →")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 14)
+                        .background(Color.purple, in: Capsule())
+                }
+                .padding(.bottom, 60)
             }
             .ignoresSafeArea()
         }
     }
+}
 
-    @ViewBuilder
-    private func tooltipItem(label: String, frame: CGRect, purpleGlow: Bool) -> some View {
-        VStack(spacing: 0) {
-            Rectangle()
-                .fill(Color.white)
-                .frame(width: 1, height: 20)
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.white)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 110)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background {
-                    if purpleGlow {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.purple.opacity(0.4))
-                    }
-                }
-        }
-        .fixedSize()
-        .position(x: frame.midX, y: frame.maxY + 34)
+
+// MARK: - Pulsing ring (opacity only — no scale movement)
+
+private struct PulsingRing: View {
+    let frame: CGRect
+    @State private var pulse = false
+
+    var body: some View {
+        Circle()
+            .strokeBorder(.white, lineWidth: 2)
+            .frame(width: frame.width + 20, height: frame.height + 20)
+            .position(x: frame.midX, y: frame.midY)
+            .opacity(pulse ? 0.25 : 1.0)
+            .animation(
+                .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                value: pulse
+            )
+            .onAppear { DispatchQueue.main.async { pulse = true } }
     }
 }
 
