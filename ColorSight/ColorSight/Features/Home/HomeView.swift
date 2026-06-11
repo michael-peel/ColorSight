@@ -5,23 +5,28 @@ import SwiftData
 //
 // Three-stage flow managed by a single enum:
 //
-//   • .welcome       — logo + "Get Started" button (shown every launch)
+//   • .welcome       — logo + "Get Started" button (first launch only)
 //   • .profilePicker — CVD profile selection (first launch only)
 //   • .menu          — Camera / Eyedropper / History / Settings
 //
+// `hasLaunchedBefore` gates whether .welcome is shown at all — true means skip to .menu.
 // `hasCompletedOnboarding` gates whether the first "Get Started" tap goes to
 // the profile picker or straight to the menu.
 
 struct HomeView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage("hasLaunchedBefore")      private var hasLaunchedBefore = false
 
     private enum Stage { case welcome, profilePicker, menu }
-    @State private var stage: Stage = .welcome
+    // Read UserDefaults directly at init time so the correct stage is set before
+    // the first render — avoids a one-frame flash of the welcome screen on repeat launches.
+    @State private var stage: Stage = UserDefaults.standard.bool(forKey: "hasLaunchedBefore") ? .menu : .welcome
     @State private var pendingProfile: CVDProfile? = nil
 
     var body: some View {
         Group {
             switch stage {
+
 
             case .welcome:
                 WelcomeScreen {
@@ -50,6 +55,11 @@ struct HomeView: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
+        .onAppear { markLaunched() }
+    }
+
+    private func markLaunched() {
+        if !hasLaunchedBefore { hasLaunchedBefore = true }
     }
 
     private func finishOnboarding() {

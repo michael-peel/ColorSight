@@ -16,6 +16,12 @@ struct CameraView: View {
     @State private var pressWorkItem:    DispatchWorkItem? = nil
     @State private var sharePayload:     SharePayload?
 
+    @AppStorage("hasSeenCameraTooltip")       private var hasSeenCameraTooltip = false
+    @AppStorage("hueIsolationActivationCount") private var hueIsolationActivationCount = 0
+    @State private var showingTooltip = false
+    @State private var buttonFrames: [TooltipButtonID: CGRect] = [:]
+    @State private var showingIsolationBanner = false
+
     // Safe-area insets read directly from UIKit so we can place UI elements
     // correctly after making the ZStack full-screen with .ignoresSafeArea().
     // The ZStack must fill the full screen so CrosshairView is centered at the
@@ -63,6 +69,17 @@ struct CameraView: View {
             VStack(spacing: 8) {
                 Spacer()
                 if viewModel.isHueIsolationActive {
+                    if showingIsolationBanner {
+                        Text("Tap a color to highlight it.\nEverything else turns gray.")
+                            .font(.subheadline)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .frame(maxWidth: 300)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                            .allowsHitTesting(false)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                     HueFamilyPickerView(selectedFamily: Bindable(viewModel).selectedHueFamily)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -71,6 +88,7 @@ struct CameraView: View {
             }
             .padding(.bottom, 40 + safeInsets.bottom)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isHueIsolationActive)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingIsolationBanner)
 
             // MARK: - Top bar (eyedropper left, settings right)
             VStack {
@@ -87,6 +105,10 @@ struct CameraView: View {
                                 .padding(10)
                                 .background(.ultraThinMaterial, in: Circle())
                                 .shadow(color: .black.opacity(0.3), radius: 4)
+                                .background(GeometryReader { geo in
+                                    Color.clear.preference(key: ButtonFramesKey.self,
+                                        value: [.chevron: geo.frame(in: .global)])
+                                })
                         }
                         .accessibilityLabel("Back to Home")
 
@@ -99,6 +121,10 @@ struct CameraView: View {
                                 .padding(10)
                                 .background(.ultraThinMaterial, in: Circle())
                                 .shadow(color: .black.opacity(0.3), radius: 4)
+                                .background(GeometryReader { geo in
+                                    Color.clear.preference(key: ButtonFramesKey.self,
+                                        value: [.eyedropper: geo.frame(in: .global)])
+                                })
                         }
 
                         Button {
@@ -112,6 +138,10 @@ struct CameraView: View {
                                 .padding(10)
                                 .background(.ultraThinMaterial, in: Circle())
                                 .shadow(color: .black.opacity(0.3), radius: 4)
+                                .background(GeometryReader { geo in
+                                    Color.clear.preference(key: ButtonFramesKey.self,
+                                        value: [.torch: geo.frame(in: .global)])
+                                })
                         }
                         .animation(.easeInOut(duration: 0.15), value: viewModel.isTorchOn)
 
@@ -138,6 +168,10 @@ struct CameraView: View {
                                     )
                                 )
                                 .shadow(color: .black.opacity(0.3), radius: 4)
+                                .background(GeometryReader { geo in
+                                    Color.clear.preference(key: ButtonFramesKey.self,
+                                        value: [.palette: geo.frame(in: .global)])
+                                })
                         }
                         .accessibilityLabel("Hue Isolation Mode")
                         .accessibilityValue(viewModel.isHueIsolationActive ? "On" : "Off")
@@ -191,8 +225,17 @@ struct CameraView: View {
                     Spacer()
                 }
             }
+
+            // MARK: - First-launch tooltip overlay (above everything)
+            if showingTooltip {
+                CameraTooltipOverlay(buttonFrames: buttonFrames, onDismiss: dismissTooltip)
+                    .transition(.opacity)
+            }
         }
-        .ignoresSafeArea()   // ← ZStack fills full screen; crosshair at true center
+        .ignoresSafeArea()
+        .onPreferenceChange(ButtonFramesKey.self) { frames in
+            buttonFrames = frames
+        }   // ← ZStack fills full screen; crosshair at true center
         // Single drag gesture (minimumDistance: 0) handles both tap and long press
         // reliably — SwiftUI's LongPressGesture + TapGesture combination is prone
         // to the tap consuming touches before the long-press timer can accumulate.
@@ -204,6 +247,7 @@ struct CameraView: View {
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in
+                    guard !showingTooltip else { return }
                     guard pressWorkItem == nil else { return }   // already started
                     let work = DispatchWorkItem {
                         pressWorkItem = nil
@@ -217,6 +261,7 @@ struct CameraView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: work)
                 }
                 .onEnded { _ in
+                    if showingTooltip { dismissTooltip(); return }
                     guard let work = pressWorkItem else { return }  // long press fired
                     work.cancel()
                     pressWorkItem = nil
@@ -242,8 +287,32 @@ struct CameraView: View {
             guard frozen, let color = viewModel.identifiedColor else { return }
             modelContext.insert(ColorSwatch(from: color, source: "camera"))
         }
-        .onAppear  { viewModel.startSession() }
+        .onAppear {
+            viewModel.startSession()
+            if !hasSeenCameraTooltip {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    withAnimation(.easeIn(duration: 0.3)) { showingTooltip = true }
+                }
+            }
+        }
         .onDisappear { viewModel.stopSession() }
+        .onChange(of: viewModel.isHueIsolationActive) { _, active in
+            guard active, hueIsolationActivationCount < 5 else { return }
+            hueIsolationActivationCount += 1
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showingIsolationBanner = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                withAnimation { showingIsolationBanner = false }
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func dismissTooltip() {
+        withAnimation(.easeOut(duration: 0.3)) { showingTooltip = false }
+        hasSeenCameraTooltip = true
     }
 
     // MARK: - Color info card
@@ -390,6 +459,84 @@ private struct CrosshairView: View {
             }
         }
         .shadow(color: .black.opacity(0.3), radius: 2)
+    }
+}
+
+// MARK: - Preference key for capturing toolbar button frames
+
+private enum TooltipButtonID: String {
+    case chevron, eyedropper, torch, palette
+}
+
+private struct ButtonFramesKey: PreferenceKey {
+    static var defaultValue: [TooltipButtonID: CGRect] = [:]
+    static func reduce(value: inout [TooltipButtonID: CGRect], nextValue: () -> [TooltipButtonID: CGRect]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
+// MARK: - First-launch tooltip overlay
+
+private struct CameraTooltipOverlay: View {
+    let buttonFrames: [TooltipButtonID: CGRect]
+    let onDismiss: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.65)
+                .ignoresSafeArea()
+
+            if let f = buttonFrames[.chevron] {
+                tooltipItem(label: "Collapse toolbar", frame: f, purpleGlow: false)
+            }
+            if let f = buttonFrames[.eyedropper] {
+                tooltipItem(label: "Open a photo to\nsample colors", frame: f, purpleGlow: false)
+            }
+            if let f = buttonFrames[.torch] {
+                tooltipItem(label: "Toggle flashlight", frame: f, purpleGlow: false)
+            }
+            if let f = buttonFrames[.palette] {
+                tooltipItem(
+                    label: "Hue Isolation —\nhighlight one color,\ngray out the rest",
+                    frame: f,
+                    purpleGlow: true
+                )
+            }
+
+            VStack {
+                Spacer()
+                Text("Tap anywhere to dismiss")
+                    .font(.caption2)
+                    .foregroundStyle(.gray)
+                    .padding(.bottom, 52)
+            }
+            .ignoresSafeArea()
+        }
+    }
+
+    @ViewBuilder
+    private func tooltipItem(label: String, frame: CGRect, purpleGlow: Bool) -> some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(Color.white)
+                .frame(width: 1, height: 20)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 110)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background {
+                    if purpleGlow {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.purple.opacity(0.4))
+                    }
+                }
+        }
+        .fixedSize()
+        .position(x: frame.midX, y: frame.maxY + 34)
     }
 }
 
