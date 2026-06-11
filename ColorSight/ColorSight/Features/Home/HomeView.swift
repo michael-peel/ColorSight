@@ -322,10 +322,12 @@ private extension CVDProfile {
 // MARK: - Main menu
 
 private struct MainMenuView: View {
-    @State private var showingCamera      = false
-    @State private var showingEyedropper  = false
-    @State private var showingHistory     = false
-    @State private var showingSettings    = false
+    @State private var showingCamera             = false
+    @State private var showingEyedropper         = false
+    @State private var showingHistory            = false
+    @State private var showingSettings           = false
+    @State private var showingProfilePicker      = false
+    @State private var showingCameraHueIsolation = false
 
     @Query(sort: \ColorSwatch.timestamp, order: .reverse)
     private var allSwatches: [ColorSwatch]
@@ -333,67 +335,156 @@ private struct MainMenuView: View {
     @AppStorage("cvdProfile") private var cvdProfileRaw: String = CVDProfile.normal.rawValue
     private var currentProfile: CVDProfile { CVDProfile(rawValue: cvdProfileRaw) ?? .normal }
 
+    // Binding that keeps @AppStorage and UserDefaults in sync when the picker writes.
+    private var profileBinding: Binding<CVDProfile> {
+        Binding(
+            get: { currentProfile },
+            set: { cvdProfileRaw = $0.rawValue }
+        )
+    }
+
+    // Forest green that reads clearly as an icon fill in both light and dark mode.
+    private static let historyGreen = Color(red: 0.15, green: 0.42, blue: 0.18)
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            // Full-bleed background so the color reaches under status bar and home indicator.
+            Color(.systemGroupedBackground).ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                // Custom header — large left-aligned wordmark, gear button right.
+                HStack {
+                    HStack(spacing: 0) {
+                        Text("Color").foregroundStyle(.primary)
+                        Text("Sight").foregroundStyle(Color.purple)
+                    }
+                    .font(.title.bold())
+
+                    Spacer()
+
+                    Button { showingSettings = true } label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 38, height: 38)
+                            .background(Color(.secondarySystemGroupedBackground), in: Circle())
+                    }
+                    .accessibilityLabel("Settings")
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
+
+                ScrollView {
+                    VStack(spacing: 12) {
+                        HeroCameraCard(action: { showingCamera = true })
+                            .frame(height: 210)
+
+                        HStack(spacing: 12) {
+                            SecondaryCard(
+                                icon:      "drop.fill",
+                                iconColor: .blue,
+                                title:     "Eyedropper",
+                                subtitle:  "From a photo",
+                                action:    { showingEyedropper = true }
+                            )
+                            SecondaryCard(
+                                icon:      "clock.fill",
+                                iconColor: MainMenuView.historyGreen,
+                                title:     "History",
+                                subtitle:  "Saved colors",
+                                action:    { showingHistory = true }
+                            )
+                        }
+                        .frame(height: 140)
+
+                        // Hue Isolation — full-width card, opens camera straight into the mode
+                        Button { showingCameraHueIsolation = true } label: {
+                            HStack(spacing: 14) {
+                                Image(systemName: "paintpalette.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(.white)
+                                    .frame(width: 48, height: 48)
+                                    .background(Color.purple,
+                                                in: RoundedRectangle(cornerRadius: 12))
+
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("Hue Isolation")
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                    Text("Highlight one color, gray out the rest")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(16)
+                            .background(Color(.secondarySystemGroupedBackground),
+                                        in: RoundedRectangle(cornerRadius: 16))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Hue Isolation. Highlight one color, gray out the rest")
+
+                        if !allSwatches.isEmpty {
+                            RecentColorsStrip(swatches: Array(allSwatches.prefix(5)))
+                        }
+
+                        HomeProfileCard(profile: currentProfile,
+                                        action: { showingProfilePicker = true })
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 4)
+                    .padding(.bottom, 32)
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showingCamera)             { CameraView() }
+        .fullScreenCover(isPresented: $showingCameraHueIsolation) { CameraView(startHueIsolation: true) }
+        .fullScreenCover(isPresented: $showingEyedropper)         { EyedropperView() }
+        .sheet(isPresented: $showingHistory)                      { HistoryView() }
+        .sheet(isPresented: $showingSettings)                     { SettingsView() }
+        .sheet(isPresented: $showingProfilePicker) {
+            HomeProfilePickerSheet(selectedProfile: profileBinding)
+        }
+    }
+}
+
+// MARK: - Home profile picker sheet
+
+private struct HomeProfilePickerSheet: View {
+    @Binding var selectedProfile: CVDProfile
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 12) {
-                    HeroCameraCard(action: { showingCamera = true })
-                        .frame(height: 200)
-
-                    HStack(spacing: 12) {
-                        SecondaryCard(
-                            icon:     "eyedropper.halffull",
-                            color:    Color.purple,
-                            title:    "Eyedropper",
-                            subtitle: "Sample from a photo",
-                            action:   { showingEyedropper = true }
-                        )
-                        SecondaryCard(
-                            icon:     "clock.arrow.circlepath",
-                            color:    Color.blue,
-                            title:    "History",
-                            subtitle: "Browse saved colors",
-                            action:   { showingHistory = true }
+                    ForEach(CVDProfile.allCases, id: \.self) { profile in
+                        CVDProfileCard(
+                            profile:    profile,
+                            isSelected: selectedProfile == profile,
+                            onSelect: {
+                                selectedProfile = profile
+                                dismiss()
+                            }
                         )
                     }
-                    .frame(height: 120)
-
-                    if !allSwatches.isEmpty {
-                        RecentColorsStrip(swatches: Array(allSwatches.prefix(5)))
-                    }
-
-                    HomeProfileCard(profile: currentProfile, action: { showingSettings = true })
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 20)
+                .padding(20)
             }
-            // .inline is required; .large titles don't support custom principal views.
+            .navigationTitle("Color Profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    HStack(spacing: 0) {
-                        Text("Color")
-                            .foregroundStyle(.primary)
-                        Text("Sight")
-                            .foregroundStyle(Color.purple)
-                    }
-                    .font(.headline)
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showingSettings = true } label: {
-                        Image(systemName: "gearshape.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .accessibilityLabel("Settings")
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
                 }
             }
         }
-        .fullScreenCover(isPresented: $showingCamera)      { CameraView() }
-        .fullScreenCover(isPresented: $showingEyedropper)  { EyedropperView() }
-        .sheet(isPresented: $showingHistory)               { HistoryView() }
-        .sheet(isPresented: $showingSettings)              { SettingsView() }
     }
 }
 
@@ -404,13 +495,13 @@ private struct HeroCameraCard: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 14) {
+            VStack(spacing: 16) {
                 Spacer()
 
                 Image(systemName: "camera.fill")
-                    .font(.system(size: 30, weight: .medium))
+                    .font(.system(size: 34, weight: .medium))
                     .foregroundStyle(.white)
-                    .frame(width: 64, height: 64)
+                    .frame(width: 80, height: 80)
                     .background(Color.purple, in: Circle())
 
                 VStack(spacing: 6) {
@@ -428,6 +519,15 @@ private struct HeroCameraCard: View {
             .frame(maxWidth: .infinity)
             .background(Color(.secondarySystemGroupedBackground),
                         in: RoundedRectangle(cornerRadius: 20))
+            .overlay(alignment: .topTrailing) {
+                Text("Primary")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.purple, in: Capsule())
+                    .padding(12)
+            }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Open Camera. Point at anything to identify its color")
@@ -438,28 +538,27 @@ private struct HeroCameraCard: View {
 // MARK: - Secondary feature card (eyedropper / history)
 
 private struct SecondaryCard: View {
-    let icon:     String
-    let color:    Color
-    let title:    String
-    let subtitle: String
-    let action:   () -> Void
+    let icon:      String
+    let iconColor: Color
+    let title:     String
+    let subtitle:  String
+    let action:    () -> Void
 
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 10) {
                 Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundStyle(color)
-                    .frame(width: 38, height: 38)
-                    .background(color.opacity(0.15),
-                                in: RoundedRectangle(cornerRadius: 10))
+                    .font(.title2)
+                    .foregroundStyle(.white)
+                    .frame(width: 48, height: 48)
+                    .background(iconColor, in: RoundedRectangle(cornerRadius: 12))
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
                         .font(.headline)
                         .foregroundStyle(.primary)
                     Text(subtitle)
-                        .font(.caption)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -481,21 +580,53 @@ private struct SecondaryCard: View {
 
 private struct RecentColorsStrip: View {
     let swatches: [ColorSwatch]
+    @State private var tappedID: UUID? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Recent")
-                .font(.caption)
+        VStack(alignment: .leading, spacing: 10) {
+            Text("RECENT")
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, 2)
 
             HStack(spacing: 8) {
                 ForEach(swatches) { swatch in
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(swatch.swiftUIColor)
-                        .frame(width: 36, height: 36)
-                        .accessibilityLabel(swatch.simpleName)
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            tappedID = tappedID == swatch.id ? nil : swatch.id
+                        }
+                    } label: {
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(swatch.swiftUIColor)
+                            .frame(height: 62)
+                            .frame(maxWidth: .infinity)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .strokeBorder(.white.opacity(0.5), lineWidth: 2)
+                                    .opacity(tappedID == swatch.id ? 1 : 0)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(swatch.simpleName)
                 }
+            }
+
+            // Name label — slides in below the row when a swatch is tapped
+            if let id = tappedID, let s = swatches.first(where: { $0.id == id }) {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(s.swiftUIColor)
+                        .frame(width: 10, height: 10)
+                    Text(s.simpleName)
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.primary)
+                    Text(s.hex)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fontDesign(.monospaced)
+                }
+                .padding(.horizontal, 2)
+                .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .topLeading)))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -510,13 +641,19 @@ private struct HomeProfileCard: View {
 
     var body: some View {
         Button(action: action) {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 12) {
+                Image(systemName: "eye.fill")
+                    .font(.callout)
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 40)
+                    .background(Color.purple, in: RoundedRectangle(cornerRadius: 10))
+
+                VStack(alignment: .leading, spacing: 2) {
                     Text("Color profile")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text(profile.displayName)
-                        .font(.body)
+                        .font(.body.bold())
                         .foregroundStyle(.primary)
                 }
 

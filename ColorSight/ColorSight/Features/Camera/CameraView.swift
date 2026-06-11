@@ -3,6 +3,8 @@ import SwiftData
 
 struct CameraView: View {
 
+    var startHueIsolation: Bool = false
+
     @Environment(\.dismiss)      private var dismiss
     @Environment(\.modelContext) private var modelContext
 
@@ -289,6 +291,7 @@ struct CameraView: View {
         }
         .onAppear {
             viewModel.startSession()
+            if startHueIsolation { viewModel.isHueIsolationActive = true }
             if !hasSeenCameraTooltip {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     withAnimation(.easeIn(duration: 0.3)) { showingTooltip = true }
