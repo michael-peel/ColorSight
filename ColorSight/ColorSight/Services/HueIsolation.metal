@@ -104,3 +104,63 @@ kernel void hueIsolate(
 
     outTex.write(out, gid);
 }
+
+// MARK: - Display pipeline (fullscreen quad for MTKView)
+
+// Must match DisplayParams in HueIsolationMetalView.swift.
+struct DisplayParams {
+    float2 textureSize;
+    float2 drawableSize;
+};
+
+struct QuadVertex {
+    float4 position [[position]];
+    float2 texCoord;
+};
+
+/// Vertex shader for a fullscreen triangle strip (4 vertices, no vertex buffer).
+/// Computes aspect-fill UV coordinates so the texture fills the MTKView the same
+/// way AVCaptureVideoPreviewLayer uses .resizeAspectFill — centers and crops.
+vertex QuadVertex displayVertex(
+    uint                    vid    [[vertex_id]],
+    constant DisplayParams& params [[buffer(0)]]
+) {
+    constexpr float2 positions[4] = { {-1,-1}, {1,-1}, {-1,1}, {1,1} };
+
+    float viewAspect = params.drawableSize.x / params.drawableSize.y;
+    float texAspect  = params.textureSize.x  / params.textureSize.y;
+
+    // Aspect-fill: scale until both screen dimensions are covered; crop the excess.
+    float uvRangeX, uvRangeY;
+    if (viewAspect >= texAspect) {
+        // View wider → fit width, crop height
+        uvRangeX = 1.0f;
+        uvRangeY = texAspect / viewAspect;
+    } else {
+        // View taller → fit height, crop width
+        uvRangeX = viewAspect / texAspect;
+        uvRangeY = 1.0f;
+    }
+    float uvCropX = (1.0f - uvRangeX) * 0.5f;
+    float uvCropY = (1.0f - uvRangeY) * 0.5f;
+
+    float2 clip = positions[vid];
+    // Map clip [-1,1] → base UV [0,1]; flip Y (Metal NDC +Y=top, texture (0,0)=top-left)
+    float2 uv = float2(
+        uvCropX + ( clip.x * 0.5f + 0.5f) * uvRangeX,
+        uvCropY + (-clip.y * 0.5f + 0.5f) * uvRangeY
+    );
+
+    QuadVertex out;
+    out.position = float4(clip, 0.0f, 1.0f);
+    out.texCoord = uv;
+    return out;
+}
+
+fragment float4 displayFragment(
+    QuadVertex       in  [[stage_in]],
+    texture2d<float> tex [[texture(0)]]
+) {
+    constexpr sampler s(min_filter::linear, mag_filter::linear, address::clamp_to_edge);
+    return tex.sample(s, in.texCoord);
+}

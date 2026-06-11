@@ -1,18 +1,18 @@
 import CoreVideo
-import CoreImage
 import Metal
-import UIKit
 
 /// Per-frame hue isolation filter (color-splash effect).
 ///
 /// Primary path — Metal GPU compute:
 ///   CVPixelBuffers are wrapped as MTLTextures via CVMetalTextureCache (zero copy).
-///   The `hueIsolate` kernel (HueIsolation.metal) classifies pixels entirely on the
-///   GPU; the processed buffer is then rendered to UIImage via a GPU-accelerated
-///   CIContext. Zero CPU pixel work per frame.
+///   The `hueIsolate` kernel classifies pixels entirely on the GPU and returns
+///   the output MTLTexture for direct display in HueIsolationMetalView — no CPU
+///   readback, no UIImage, no CIContext.
 ///
 /// Fallback path — CPU per-pixel loop:
-///   Used automatically if Metal initialisation fails (simulator, unusual hardware).
+///   Writes processed pixels to the output CVPixelBuffer but returns nil (no
+///   MTKView display) — used only on non-Metal hardware, which iOS 26 devices
+///   never are.
 ///
 /// Threading: all methods are safe to call from any thread.
 final class HueIsolationService: @unchecked Sendable {
@@ -23,9 +23,6 @@ final class HueIsolationService: @unchecked Sendable {
     private let commandQueue:  MTLCommandQueue?
     private let pipelineState: MTLComputePipelineState?
     private let textureCache:  CVMetalTextureCache?
-
-    // GPU-accelerated CIContext — shared by both paths for UIImage conversion.
-    private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     // MARK: - Init
 
@@ -56,11 +53,7 @@ final class HueIsolationService: @unchecked Sendable {
     // MARK: - Buffer management
 
     /// Allocates an IOSurface-backed, Metal-compatible output pixel buffer matching
-    /// the dimensions and format of `input`. Call once at session start and reuse.
-    ///
-    /// Both attributes are required:
-    ///   • IOSurface: CIContext renders GPU-side without a CPU readback.
-    ///   • MetalCompatibility: CVMetalTextureCache can wrap the buffer as MTLTexture.
+    /// the dimensions and format of `input`. Call once per session and reuse.
     nonisolated static func makeOutputBuffer(matchingFormat input: CVPixelBuffer) -> CVPixelBuffer? {
         let width  = CVPixelBufferGetWidth(input)
         let height = CVPixelBufferGetHeight(input)
@@ -78,15 +71,18 @@ final class HueIsolationService: @unchecked Sendable {
 
     // MARK: - Public entry point
 
-    /// Applies hue isolation to `input`, writes the result into `output`,
-    /// and returns a UIImage for display.
-    nonisolated func process(input: CVPixelBuffer, family: HueFamily, output: CVPixelBuffer) -> UIImage? {
+    /// Applies hue isolation to `input` and writes the result into `output`.
+    /// Returns true if output was written successfully (GPU or CPU path).
+    /// The caller wraps `output` in a CMSampleBuffer and enqueues it for display.
+    nonisolated func process(input: CVPixelBuffer, family: HueFamily,
+                             output: CVPixelBuffer) -> Bool {
         if let device = metalDevice, let cq = commandQueue,
            let ps = pipelineState, let tc = textureCache {
             return processGPU(input: input, family: family, output: output,
                               device: device, cq: cq, ps: ps, tc: tc)
         }
-        return processCPU(input: input, family: family, output: output)
+        processCPU(input: input, family: family, output: output)
+        return true
     }
 
     // MARK: - GPU path
@@ -95,30 +91,29 @@ final class HueIsolationService: @unchecked Sendable {
         input:  CVPixelBuffer, family: HueFamily, output: CVPixelBuffer,
         device: MTLDevice, cq: MTLCommandQueue,
         ps:     MTLComputePipelineState, tc: CVMetalTextureCache
-    ) -> UIImage? {
+    ) -> Bool {
         let w = CVPixelBufferGetWidth(input)
         let h = CVPixelBufferGetHeight(input)
 
-        // Wrap CVPixelBuffers as MTLTextures via the cache — zero CPU-GPU copy.
+        // Wrap both CVPixelBuffers as MTLTextures via the cache — zero CPU-GPU copy.
         var inRef: CVMetalTexture?
         guard CVMetalTextureCacheCreateTextureFromImage(
             kCFAllocatorDefault, tc, input, nil, .bgra8Unorm, w, h, 0, &inRef
-        ) == kCVReturnSuccess, let inRef else { return nil }
+        ) == kCVReturnSuccess, let inRef else { return false }
 
-        // Output texture needs shaderWrite so the kernel can write to it.
         let outAttrs = [kCVMetalTextureUsage:
             NSNumber(value: MTLTextureUsage([.shaderRead, .shaderWrite]).rawValue)
         ] as CFDictionary
         var outRef: CVMetalTexture?
         guard CVMetalTextureCacheCreateTextureFromImage(
             kCFAllocatorDefault, tc, output, outAttrs, .bgra8Unorm, w, h, 0, &outRef
-        ) == kCVReturnSuccess, let outRef else { return nil }
+        ) == kCVReturnSuccess, let outRef else { return false }
 
         guard let inTex  = CVMetalTextureGetTexture(inRef),
-              let outTex = CVMetalTextureGetTexture(outRef) else { return nil }
+              let outTex = CVMetalTextureGetTexture(outRef) else { return false }
 
         guard let cmdBuf  = cq.makeCommandBuffer(),
-              let encoder = cmdBuf.makeComputeCommandEncoder() else { return nil }
+              let encoder = cmdBuf.makeComputeCommandEncoder() else { return false }
 
         encoder.setComputePipelineState(ps)
         encoder.setTexture(inTex,  index: 0)
@@ -127,47 +122,46 @@ final class HueIsolationService: @unchecked Sendable {
         var params = HueIsolationParams(family: UInt32(family.metalIndex))
         encoder.setBytes(&params, length: MemoryLayout<HueIsolationParams>.size, index: 0)
 
-        // 16×16 threadgroup is cache-efficient for 2-D image processing on Apple GPUs.
-        // dispatchThreads handles non-multiple-of-16 image dimensions automatically.
         encoder.dispatchThreads(
             MTLSize(width: w, height: h, depth: 1),
             threadsPerThreadgroup: MTLSize(width: 16, height: 16, depth: 1)
         )
         encoder.endEncoding()
         cmdBuf.commit()
-        cmdBuf.waitUntilCompleted()   // sampleQueue thread; GPU completes in <5 ms on A18 Pro
+        cmdBuf.waitUntilCompleted()
 
+        // Flush the cache so the output CVPixelBuffer's IOSurface is up to date
+        // and safe to wrap in a CMSampleBuffer for AVSampleBufferDisplayLayer.
         CVMetalTextureCacheFlush(tc, 0)
 
-        // Convert to UIImage — CIContext reads from the IOSurface GPU-side, no CPU pixel copy.
-        let ci = CIImage(cvPixelBuffer: output)
-        guard let cg = ciContext.createCGImage(ci, from: ci.extent) else { return nil }
-        return UIImage(cgImage: cg)
+        return true
     }
 
     // MARK: - CPU fallback path
 
-    nonisolated private func processCPU(input: CVPixelBuffer, family: HueFamily, output: CVPixelBuffer) -> UIImage? {
+    // Writes processed pixels to `output` but returns no display artifact.
+    // Called only on non-Metal hardware; all iOS 26 devices have Metal.
+    nonisolated private func processCPU(input: CVPixelBuffer, family: HueFamily,
+                                        output: CVPixelBuffer) {
         let width  = CVPixelBufferGetWidth(input)
         let height = CVPixelBufferGetHeight(input)
 
         guard CVPixelBufferGetWidth(output)  == width,
-              CVPixelBufferGetHeight(output) == height else { return nil }
+              CVPixelBufferGetHeight(output) == height else { return }
 
         guard CVPixelBufferLockBaseAddress(input,  [.readOnly]) == kCVReturnSuccess,
               CVPixelBufferLockBaseAddress(output, [])           == kCVReturnSuccess
-        else { return nil }
+        else { return }
         defer {
             CVPixelBufferUnlockBaseAddress(output, [])
             CVPixelBufferUnlockBaseAddress(input,  [.readOnly])
         }
 
         guard let srcBase = CVPixelBufferGetBaseAddress(input),
-              let dstBase = CVPixelBufferGetBaseAddress(output) else { return nil }
+              let dstBase = CVPixelBufferGetBaseAddress(output) else { return }
 
         let srcBPR = CVPixelBufferGetBytesPerRow(input)
         let dstBPR = CVPixelBufferGetBytesPerRow(output)
-
         let srcBuf = UnsafeRawBufferPointer(start: srcBase, count: height * srcBPR)
         let dstBuf = UnsafeMutableRawBufferPointer(start: dstBase, count: height * dstBPR)
 
@@ -187,10 +181,6 @@ final class HueIsolationService: @unchecked Sendable {
                 }
             }
         }
-
-        let ci = CIImage(cvPixelBuffer: output)
-        guard let cg = ciContext.createCGImage(ci, from: ci.extent) else { return nil }
-        return UIImage(cgImage: cg)
     }
 }
 

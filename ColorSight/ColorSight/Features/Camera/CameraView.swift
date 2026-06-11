@@ -35,8 +35,9 @@ struct CameraView: View {
             // MARK: - Hue isolation overlay
             // Sits above the raw preview so the color-splash effect is visible,
             // but below the crosshair and all controls.
-            if viewModel.isHueIsolationActive, let img = viewModel.isolationFilteredImage {
-                HueIsolationOverlayView(image: img)
+            // MTKView renders the output MTLTexture directly — no UIImage conversion.
+            if viewModel.isHueIsolationActive {
+                HueIsolationDisplayView(displayLayer: viewModel.isolationDisplayLayer)
                     .transition(.opacity)
             }
 

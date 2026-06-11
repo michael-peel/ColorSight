@@ -11,16 +11,17 @@ import UIKit
 // Each var is accessed from exactly ONE queue, so no locks are needed.
 
 private final class CameraThreadState: @unchecked Sendable {
-    nonisolated(unsafe) var isConfigured   = false               // sessionQueue only
-    nonisolated(unsafe) var lastSampleTime: Double = 0           // sampleQueue only
+    nonisolated(unsafe) var isConfigured  = false               // sessionQueue only
     nonisolated(unsafe) var captureDevice: AVCaptureDevice?      // sessionQueue only
 
     // Hue isolation — written on MainActor, read on sampleQueue
     nonisolated(unsafe) var isHueIsolationActive = false
     nonisolated(unsafe) var selectedHueFamily    = HueFamily.red
+    // Set when isolation activates; nil when off. enqueue() is thread-safe.
+    nonisolated(unsafe) var isolationDisplayLayer: AVSampleBufferDisplayLayer?
     // Allocated lazily on first isolated frame; reused for the session lifetime
     nonisolated(unsafe) var isolationOutputBuffer: CVPixelBuffer?   // sampleQueue only
-    // Counts frames seen while isolation mode is active; used for even/odd skip logic
+    // Frame counter for periodic timing prints
     nonisolated(unsafe) var isolationFrameCount: UInt64 = 0         // sampleQueue only
     // @unchecked Sendable service; safe to call from sampleQueue
     let hueIsolationService = HueIsolationService()
@@ -61,16 +62,22 @@ final class CameraViewModel: NSObject {
     var isHueIsolationActive = false {
         didSet {
             threadState.isHueIsolationActive = isHueIsolationActive
-            // Drop the stale frame immediately so the overlay disappears on toggle-off.
-            if !isHueIsolationActive { isolationFilteredImage = nil }
+            if isHueIsolationActive {
+                // Give sampleQueue a reference so it can enqueue without a main-thread hop.
+                threadState.isolationDisplayLayer = isolationDisplayLayer
+            } else {
+                threadState.isolationDisplayLayer = nil
+                isolationDisplayLayer.sampleBufferRenderer
+                    .flush(removingDisplayedImage: true, completionHandler: nil)
+            }
         }
     }
     var selectedHueFamily: HueFamily = .red {
         didSet { threadState.selectedHueFamily = selectedHueFamily }
     }
-    /// Processed frame produced by HueIsolationService on sampleQueue, displayed by
-    /// HueIsolationOverlayView. Nil when isolation mode is off.
-    var isolationFilteredImage: UIImage?
+    /// AVSampleBufferDisplayLayer owned here so sampleQueue can enqueue processed
+    /// CVPixelBuffers directly without dispatching to the main thread each frame.
+    let isolationDisplayLayer = AVSampleBufferDisplayLayer()
 
     // MARK: - Internals
 
@@ -156,7 +163,19 @@ final class CameraViewModel: NSObject {
             session.canAddInput(input)
         else { postError("Could not access the back camera."); return }
         session.addInput(input)
-        threadState.captureDevice = device   // kept for refocus()
+        threadState.captureDevice = device
+
+        // Lock capture to exactly 30fps. At 7–9 ms GPU processing per frame this
+        // leaves ~24 ms of headroom and produces smooth, consistent frame delivery.
+        do {
+            try device.lockForConfiguration()
+            let thirtyFPS = CMTime(value: 1, timescale: 30)
+            device.activeVideoMinFrameDuration = thirtyFPS
+            device.activeVideoMaxFrameDuration = thirtyFPS
+            device.unlockForConfiguration()
+        } catch {
+            // Non-critical — device runs at its default rate if lock fails.
+        }
 
         let output = AVCaptureVideoDataOutput()
         output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
@@ -214,12 +233,8 @@ extension CameraViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
         didOutput sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
-        // Throttle to ~20 fps. threadState has no actor isolation so this
-        // read/write is direct — no stale values, no queued hops.
-        let now = CACurrentMediaTime()
-        guard now - threadState.lastSampleTime >= 0.05 else { return }
-        threadState.lastSampleTime = now
-
+        // Frame rate is hardware-locked to 30fps via activeVideoMinFrameDuration /
+        // activeVideoMaxFrameDuration; no software throttle needed.
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
         CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
@@ -253,7 +268,8 @@ extension CameraViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
         }
 
         // Hue isolation filter — applies color-splash effect when mode is active.
-        // Metal GPU path completes in 4–9 ms on A18 Pro, well within one frame at 20 fps.
+        // GPU kernel writes to outBuffer; we wrap it in a CMSampleBuffer and enqueue
+        // directly on sampleQueue — no main-thread dispatch per frame.
         if threadState.isHueIsolationActive {
             threadState.isolationFrameCount &+= 1
             if threadState.isolationOutputBuffer == nil {
@@ -262,18 +278,17 @@ extension CameraViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
             }
             if let outBuffer = threadState.isolationOutputBuffer {
                 let t0 = CACurrentMediaTime()
-                let filteredImage = threadState.hueIsolationService.process(
+                let wrote = threadState.hueIsolationService.process(
                     input:  pixelBuffer,
                     family: threadState.selectedHueFamily,
                     output: outBuffer
                 )
                 let ms = (CACurrentMediaTime() - t0) * 1000
-                // Print timing every 30 frames (~1.5 s at 20 fps).
                 if threadState.isolationFrameCount.isMultiple(of: 30) {
                     print("[HueIsolation] \(String(format: "%.1f", ms)) ms/frame")
                 }
-                DispatchQueue.main.async { [weak self] in
-                    self?.isolationFilteredImage = filteredImage
+                if wrote, let sampleBuf = Self.makeSampleBuffer(from: outBuffer) {
+                    threadState.isolationDisplayLayer?.enqueue(sampleBuf)
                 }
             }
         }
@@ -284,6 +299,37 @@ extension CameraViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
         didDrop sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) { }
+
+    // MARK: - CMSampleBuffer helper
+
+    /// Wraps a CVPixelBuffer in a CMSampleBuffer stamped with the current host time.
+    /// AVSampleBufferDisplayLayer.enqueue() is thread-safe; call from any queue.
+    nonisolated private static func makeSampleBuffer(from pixelBuffer: CVPixelBuffer) -> CMSampleBuffer? {
+        var formatDescription: CMVideoFormatDescription?
+        guard CMVideoFormatDescriptionCreateForImageBuffer(
+            allocator: kCFAllocatorDefault,
+            imageBuffer: pixelBuffer,
+            formatDescriptionOut: &formatDescription
+        ) == noErr, let formatDescription else { return nil }
+
+        var timingInfo = CMSampleTimingInfo(
+            duration:              .invalid,
+            presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()),
+            decodeTimeStamp:       .invalid
+        )
+        var sampleBuffer: CMSampleBuffer?
+        guard CMSampleBufferCreateForImageBuffer(
+            allocator:             kCFAllocatorDefault,
+            imageBuffer:           pixelBuffer,
+            dataReady:             true,
+            makeDataReadyCallback: nil,
+            refcon:                nil,
+            formatDescription:     formatDescription,
+            sampleTiming:          &timingInfo,
+            sampleBufferOut:       &sampleBuffer
+        ) == noErr else { return nil }
+        return sampleBuffer
+    }
 
     // MARK: - Region averaging
 

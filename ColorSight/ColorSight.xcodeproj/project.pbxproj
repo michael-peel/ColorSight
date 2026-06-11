@@ -6,8 +6,19 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		AAAA0005BBBB000000CC0001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4C0C90ED2FBF838200FCDDB4 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4C0C90F42FBF838200FCDDB4;
+			remoteInfo = ColorSight;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		4C0C90F52FBF838200FCDDB4 /* ColorSight.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ColorSight.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AAAA0001BBBB000000CC0001 /* ColorSightTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ColorSightTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +27,22 @@
 			path = ColorSight;
 			sourceTree = "<group>";
 		};
+		AAAA0002BBBB000000CC0001 /* ColorSightTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ColorSightTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		4C0C90F22FBF838200FCDDB4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AAAA0004BBBB000000CC0001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +56,7 @@
 			isa = PBXGroup;
 			children = (
 				4C0C90F72FBF838200FCDDB4 /* ColorSight */,
+				AAAA0002BBBB000000CC0001 /* ColorSightTests */,
 				4C0C90F62FBF838200FCDDB4 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				4C0C90F52FBF838200FCDDB4 /* ColorSight.app */,
+				AAAA0001BBBB000000CC0001 /* ColorSightTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,6 +95,28 @@
 			productReference = 4C0C90F52FBF838200FCDDB4 /* ColorSight.app */;
 			productType = "com.apple.product-type.application";
 		};
+		AAAA0007BBBB000000CC0001 /* ColorSightTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AAAA000ABBBB000000CC0001 /* Build configuration list for PBXNativeTarget "ColorSightTests" */;
+			buildPhases = (
+				AAAA0003BBBB000000CC0001 /* Sources */,
+				AAAA0004BBBB000000CC0001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AAAA0006BBBB000000CC0001 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AAAA0002BBBB000000CC0001 /* ColorSightTests */,
+			);
+			name = ColorSightTests;
+			packageProductDependencies = (
+			);
+			productName = ColorSightTests;
+			productReference = AAAA0001BBBB000000CC0001 /* ColorSightTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -82,6 +129,10 @@
 				TargetAttributes = {
 					4C0C90F42FBF838200FCDDB4 = {
 						CreatedOnToolsVersion = 26.5;
+					};
+					AAAA0007BBBB000000CC0001 = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = 4C0C90F42FBF838200FCDDB4;
 					};
 				};
 			};
@@ -100,6 +151,7 @@
 			projectRoot = "";
 			targets = (
 				4C0C90F42FBF838200FCDDB4 /* ColorSight */,
+				AAAA0007BBBB000000CC0001 /* ColorSightTests */,
 			);
 		};
 /* End PBXProject section */
@@ -122,7 +174,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AAAA0003BBBB000000CC0001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AAAA0006BBBB000000CC0001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4C0C90F42FBF838200FCDDB4 /* ColorSight */;
+			targetProxy = AAAA0005BBBB000000CC0001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		4C0C90FE2FBF838400FCDDB4 /* Debug */ = {
@@ -318,6 +385,52 @@
 			};
 			name = Release;
 		};
+		AAAA0008BBBB000000CC0001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = P3G2MZK5K4;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.michaelpeel.ColorSightTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ColorSight.app/ColorSight";
+			};
+			name = Debug;
+		};
+		AAAA0009BBBB000000CC0001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = P3G2MZK5K4;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.michaelpeel.ColorSightTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ColorSight.app/ColorSight";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -335,6 +448,15 @@
 			buildConfigurations = (
 				4C0C91012FBF838400FCDDB4 /* Debug */,
 				4C0C91022FBF838400FCDDB4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AAAA000ABBBB000000CC0001 /* Build configuration list for PBXNativeTarget "ColorSightTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AAAA0008BBBB000000CC0001 /* Debug */,
+				AAAA0009BBBB000000CC0001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
