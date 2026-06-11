@@ -572,12 +572,12 @@ private struct PulsingRing: View {
             .strokeBorder(.white, lineWidth: 2)
             .frame(width: frame.width + 20, height: frame.height + 20)
             .position(x: frame.midX, y: frame.midY)
-            .opacity(pulse ? 0.25 : 1.0)
-            .animation(
-                .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
-                value: pulse
-            )
-            .onAppear { DispatchQueue.main.async { pulse = true } }
+            .opacity(pulse ? 0.2 : 1.0)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                    pulse = true
+                }
+            }
     }
 }
 
