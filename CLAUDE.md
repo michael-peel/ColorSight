@@ -151,6 +151,36 @@ Nearest-neighbor matching uses **CIELAB (LAB) color space** for perceptual accur
 - **Camera pixel sampling**: always on a background thread. Never block main thread in AVFoundation delegates.
 - **UI updates**: always dispatch to `DispatchQueue.main` (or use `@MainActor`).
 - **ColorEngine**: thread-safe, stateless — safe to call from any thread.
+- **Hue Isolation display**: `AVSampleBufferDisplayLayer.enqueue()` is thread-safe — call directly on `sampleQueue`, zero `DispatchQueue.main.async` per frame.
+
+### Hue Isolation Mode (color-splash filter)
+
+Real-time filter that keeps pixels matching a chosen hue family in color and desaturates everything else to greyscale.
+
+**Data flow — one camera frame:**
+1. `AVCaptureVideoDataOutputSampleBufferDelegate` fires on `sampleQueue` with a `CVPixelBuffer` (BGRA, 1280×720).
+2. `HueIsolationService.process(input:family:output:)` runs the Metal compute kernel:
+   - Wraps `input` and `output` CVPixelBuffers as `MTLTexture`s via `CVMetalTextureCache` (zero CPU↔GPU copy).
+   - Dispatches `hueIsolate` kernel — each thread classifies one pixel via HSB → writes original color or BT.601 luma greyscale.
+   - `cmdBuf.waitUntilCompleted()` — GPU write to `output` CVPixelBuffer is complete on return.
+   - Returns `true` on success, `false` on GPU setup failure (triggers CPU fallback).
+3. Caller wraps `output` CVPixelBuffer in a `CMSampleBuffer` (host-clock timestamp) and calls `isolationDisplayLayer.enqueue(_:)` — still on `sampleQueue`, no main-thread hop.
+
+**Key types:**
+| Type | Role |
+|------|------|
+| `HueIsolation.metal` | `hueIsolate` compute kernel + `displayVertex`/`displayFragment` shaders (display pipeline removed — no longer used) |
+| `HueIsolationService` | Owns `MTLDevice`, `MTLCommandQueue`, `MTLComputePipelineState`, `CVMetalTextureCache`; CPU fallback for non-Metal hardware |
+| `CameraViewModel.isolationDisplayLayer` | `AVSampleBufferDisplayLayer` owned by the ViewModel; `videoGravity = .resizeAspectFill`; `sampleBufferRenderer.flush(removingDisplayedImage:)` clears on mode-off |
+| `HueIsolationDisplayView` | `UIViewRepresentable` wrapping a `UIView` that hosts the display layer as a sublayer; `layoutSubviews` keeps the layer frame in sync (no implicit CALayer animation) |
+| `CameraThreadState.isolationDisplayLayer` | `nonisolated(unsafe)` reference set on MainActor when mode activates; read on `sampleQueue` to call `enqueue()` |
+
+**Why AVSampleBufferDisplayLayer, not MTKView:**
+MTKView's insertion into the SwiftUI hierarchy blocks the main thread (~100–200 ms) regardless of when the Metal pipeline is compiled. `AVSampleBufferDisplayLayer` is a `CALayer` subclass — no layout stall, and `enqueue()` is the same buffer-to-screen path used internally by `AVCaptureVideoPreviewLayer`.
+
+**CPU fallback** (`HueIsolationService.processCPU`): direct per-pixel BGRA loop using `HueFamily.matches(r:g:b:)`. Returns `true` so the output CVPixelBuffer is still enqueued. Never runs on iOS 26 devices (all have Metal), present for correctness.
+
+**Metal shader — hue classification** mirrors `HueFamily.matches()` exactly. Both must be kept in sync; `HueFamilyTests.testMetalIndexMatchesCaseOrder()` guards the enum↔shader index alignment.
 
 ### SwiftData
 Use `@Model` for `ColorSwatch` (history entries). The model context lives in the App entry point and is passed down via `.modelContainer(for:)`.
@@ -249,5 +279,6 @@ Currently: **Paid Apple Developer account** (upgraded 2026-05-27)
 |------|--------------|
 | 2026-05-21 | Project initialized. GitHub repo created. Xcode project scaffolded. Camera permission screen working on device. First commit pushed. CLAUDE.md added to repo root. |
 | 2026-05-27 | Removed custom CVD profile (unimplemented). Upgraded to paid Apple Developer account. TestFlight setup in progress. |
+| 2026-06-10 | Implemented Hue Isolation Mode (color-splash filter): Metal compute kernel in HueIsolation.metal, HueIsolationService GPU/CPU pipeline, AVSampleBufferDisplayLayer display path with zero main-thread dispatch per frame. Added ColorSightTests target (30 unit tests, all passing on device). |
 
 > Update this table at the end of every working session.
