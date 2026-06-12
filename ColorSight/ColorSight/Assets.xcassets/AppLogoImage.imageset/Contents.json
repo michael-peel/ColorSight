@@ -1,17 +1,31 @@
 {
   "images" : [
     {
-      "filename" : "AppLogoImage.png",
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "light"
+        }
+      ],
+      "filename" : "AppLogoImage_Light.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "dark"
+        }
+      ],
+      "filename" : "AppLogoImage_Dark.png",
       "idiom" : "universal",
-      "scale" : "2x"
+      "scale" : "1x"
     },
     {
+      "filename" : "AppLogoImage_Light.png",
       "idiom" : "universal",
-      "scale" : "3x"
+      "scale" : "1x"
     }
   ],
   "info" : {
