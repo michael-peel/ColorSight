@@ -9,7 +9,7 @@ struct HueFamilyPickerView: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(HueFamily.allCases) { family in
+                ForEach(HueFamily.allCases.filter { $0 != .white && $0 != .gray && $0 != .black }) { family in
                     HueFamilyPill(family: family, isSelected: family == selectedFamily)
                         .onTapGesture {
                             withAnimation(.easeInOut(duration: 0.15)) {
