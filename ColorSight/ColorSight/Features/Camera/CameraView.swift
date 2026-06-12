@@ -307,6 +307,13 @@ struct CameraView: View {
             }
         }
         .onDisappear { viewModel.stopSession() }
+        .onChange(of: hasSeenCameraTooltip) { _, newValue in
+            if !newValue && !showingTooltip {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    withAnimation(.easeIn(duration: 0.3)) { showingTooltip = true }
+                }
+            }
+        }
         .onChange(of: viewModel.isHueIsolationActive) { _, active in
             guard active, hueIsolationActivationCount < 5 else { return }
             hueIsolationActivationCount += 1

@@ -35,11 +35,10 @@ struct SettingsView: View {
                     Toggle("Sample Region",  isOn: $regionSamplingEnabled)
 
                     Button("Replay Feature Tour") {
-                        hasSeenCameraTooltip = false
                         if let onReplayTour {
                             onReplayTour()
                         } else {
-                            // Opened from inside the camera — just reset; tour shows on next open.
+                            hasSeenCameraTooltip = false
                             dismiss()
                         }
                     }

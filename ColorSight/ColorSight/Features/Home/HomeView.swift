@@ -330,6 +330,8 @@ private struct MainMenuView: View {
     @State private var showingCameraHueIsolation = false
     @State private var openCameraOnSettingsDismiss = false
 
+    @AppStorage("hasSeenCameraTooltip") private var hasSeenCameraTooltip = false
+
     @Query(sort: \ColorSwatch.timestamp, order: .reverse)
     private var allSwatches: [ColorSwatch]
 
@@ -452,6 +454,9 @@ private struct MainMenuView: View {
             guard openCameraOnSettingsDismiss else { return }
             openCameraOnSettingsDismiss = false
             Task { @MainActor in showingCamera = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                hasSeenCameraTooltip = false
+            }
         }) {
             SettingsView(onReplayTour: {
                 openCameraOnSettingsDismiss = true
