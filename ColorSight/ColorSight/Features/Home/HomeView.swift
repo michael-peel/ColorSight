@@ -79,7 +79,12 @@ private struct WelcomeScreen: View {
             Spacer()
 
             // Logo
-            ColorSightLogo(size: 160)
+            Image("AppLogoImage")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 160, height: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 36, style: .continuous))
+                .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 4)
                 .padding(.bottom, 20)
 
             // Two-tone wordmark: "Color" dark, "Sight" purple
@@ -685,91 +690,6 @@ private struct HomeProfileCard: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Color profile: \(profile.displayName)")
         .accessibilityAddTraits(.isButton)
-    }
-}
-
-// MARK: - ColorSight logo
-//
-// A colour-wheel "C" arc (11 segments, 270° span) with a dark eye/pupil.
-//
-// Coordinate convention (used only within this view):
-//   • 0° = 12 o'clock, positive = clockwise
-//   • Gap from 45° (top-right) → 135° (bottom-right) — centred at 90° (right)
-//   • Arc from 135° → 45° clockwise = 270° — this forms a proper "C"
-
-private struct ColorSightLogo: View {
-    var size: CGFloat = 160
-
-    // 11 segments: cyan → … → yellow, going clockwise from the bottom of the C
-    private let segmentColors: [Color] = [
-        Color(red: 0.12, green: 0.78, blue: 0.92),   // cyan-blue  (arc start ~135°)
-        Color(red: 0.18, green: 0.58, blue: 0.96),   // blue
-        Color(red: 0.35, green: 0.40, blue: 0.93),   // blue-violet
-        Color(red: 0.53, green: 0.25, blue: 0.88),   // violet
-        Color(red: 0.68, green: 0.18, blue: 0.85),   // purple
-        Color(red: 0.83, green: 0.10, blue: 0.52),   // magenta
-        Color(red: 0.90, green: 0.10, blue: 0.16),   // red
-        Color(red: 0.95, green: 0.32, blue: 0.05),   // red-orange
-        Color(red: 0.97, green: 0.55, blue: 0.03),   // orange
-        Color(red: 0.97, green: 0.73, blue: 0.03),   // yellow-orange
-        Color(red: 0.97, green: 0.89, blue: 0.08),   // yellow     (arc end ~45°)
-    ]
-
-    var body: some View {
-        Canvas { ctx, _ in
-            let cx      = size / 2
-            let cy      = size / 2
-            let center  = CGPoint(x: cx, y: cy)
-            let outerR: CGFloat = size * 0.47
-            let innerR: CGFloat = size * 0.29
-
-            // Arc begins at 135° (lower-right, bottom arm of C) and runs 270° clockwise
-            // to 45° (upper-right, top arm of C). Gap = 45°→135° = right side.
-            let arcStartDeg: Double = 135
-            let arcSpan:     Double = 270
-            let n = segmentColors.count
-            let segSpan     = arcSpan / Double(n)
-            let gapBetween: Double = 1.5   // degrees of blank space between segments
-
-            for i in 0..<n {
-                let segStart = arcStartDeg + Double(i)       * segSpan + gapBetween / 2
-                let segEnd   = arcStartDeg + Double(i + 1)   * segSpan - gapBetween / 2
-
-                // addArc uses math angles (0° = right, positive = counterclockwise) but in
-                // UIKit's flipped Y system clockwise:false means clockwise on screen.
-                // Convert "degrees clockwise from top" → "degrees from right" by -90°.
-                let aStart = Angle(degrees: segStart - 90)
-                let aEnd   = Angle(degrees: segEnd   - 90)
-
-                var path = Path()
-                path.addArc(center: center, radius: outerR,
-                            startAngle: aStart, endAngle: aEnd, clockwise: false)
-                path.addArc(center: center, radius: innerR,
-                            startAngle: aEnd,   endAngle: aStart, clockwise: true)
-                path.closeSubpath()
-                ctx.fill(path, with: .color(segmentColors[i]))
-            }
-            // Inner fill is handled by the systemBackground overlay below the eye circle.
-        }
-        .frame(width: size, height: size)
-        .overlay {
-            // Adaptive fill behind the eye — matches the system background so the
-            // inner ring area looks clean in both light and dark mode.
-            Circle()
-                .fill(Color(.systemBackground))
-                .frame(width: (size * 0.29 - 1) * 2, height: (size * 0.29 - 1) * 2)
-
-            // Dark navy eye circle
-            Circle()
-                .fill(Color(red: 0.09, green: 0.10, blue: 0.16))
-                .frame(width: size * 0.37, height: size * 0.37)
-
-            // White pupil highlight (upper-left, like a light reflection)
-            Circle()
-                .fill(.white)
-                .frame(width: size * 0.10, height: size * 0.10)
-                .offset(x: -size * 0.07, y: -size * 0.07)
-        }
     }
 }
 
