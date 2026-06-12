@@ -4,6 +4,10 @@ import SwiftUI
 
 struct SettingsView: View {
 
+    /// Called when the user taps "Replay Feature Tour". The caller is responsible
+    /// for dismissing this sheet and navigating to the camera.
+    var onReplayTour: (() -> Void)? = nil
+
     @Environment(\.dismiss) private var dismiss
 
     // CVD profile — read/written via CVDProfile.load() / profile.save()
@@ -12,6 +16,7 @@ struct SettingsView: View {
     @AppStorage("hapticsEnabled")        private var hapticsEnabled        = true
     @AppStorage("voiceFeedbackEnabled")  private var voiceFeedbackEnabled  = true
     @AppStorage("regionSamplingEnabled") private var regionSamplingEnabled = false
+    @AppStorage("hasSeenCameraTooltip")  private var hasSeenCameraTooltip  = false
 
     var body: some View {
         NavigationStack {
@@ -28,6 +33,17 @@ struct SettingsView: View {
                     Toggle("Vibration",      isOn: $hapticsEnabled)
                     Toggle("Voice Feedback", isOn: $voiceFeedbackEnabled)
                     Toggle("Sample Region",  isOn: $regionSamplingEnabled)
+
+                    Button("Replay Feature Tour") {
+                        hasSeenCameraTooltip = false
+                        if let onReplayTour {
+                            onReplayTour()
+                        } else {
+                            // Opened from inside the camera — just reset; tour shows on next open.
+                            dismiss()
+                        }
+                    }
+                    .foregroundStyle(Color.accentColor)
                 } header: {
                     Text("Preferences")
                 } footer: {

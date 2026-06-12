@@ -263,7 +263,7 @@ struct CameraView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: work)
                 }
                 .onEnded { _ in
-                    if showingTooltip { dismissTooltip(); return }
+                    guard !showingTooltip else { return }
                     guard let work = pressWorkItem else { return }  // long press fired
                     work.cancel()
                     pressWorkItem = nil
@@ -285,9 +285,15 @@ struct CameraView: View {
             EyedropperView()
         }
         // Save to history whenever the user freezes the camera on a color.
+        // Runs on a background context so the SQLite write never blocks the main thread.
         .onChange(of: viewModel.isFrozen) { _, frozen in
             guard frozen, let color = viewModel.identifiedColor else { return }
-            modelContext.insert(ColorSwatch(from: color, source: "camera"))
+            let container = modelContext.container
+            Task.detached {
+                let context = ModelContext(container)
+                context.insert(ColorSwatch(from: color, source: "camera"))
+                try? context.save()
+            }
         }
         .onAppear {
             viewModel.startSession()
@@ -560,6 +566,8 @@ private struct CameraTooltipOverlay: View {
             }
             .ignoresSafeArea()
         }
+        .contentShape(Rectangle())
+        .onTapGesture {}
     }
 }
 

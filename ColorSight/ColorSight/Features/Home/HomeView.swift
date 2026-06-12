@@ -328,6 +328,7 @@ private struct MainMenuView: View {
     @State private var showingSettings           = false
     @State private var showingProfilePicker      = false
     @State private var showingCameraHueIsolation = false
+    @State private var openCameraOnSettingsDismiss = false
 
     @Query(sort: \ColorSwatch.timestamp, order: .reverse)
     private var allSwatches: [ColorSwatch]
@@ -447,7 +448,16 @@ private struct MainMenuView: View {
         .fullScreenCover(isPresented: $showingCameraHueIsolation) { CameraView(startHueIsolation: true) }
         .fullScreenCover(isPresented: $showingEyedropper)         { EyedropperView() }
         .sheet(isPresented: $showingHistory)                      { HistoryView() }
-        .sheet(isPresented: $showingSettings)                     { SettingsView() }
+        .sheet(isPresented: $showingSettings, onDismiss: {
+            guard openCameraOnSettingsDismiss else { return }
+            openCameraOnSettingsDismiss = false
+            Task { @MainActor in showingCamera = true }
+        }) {
+            SettingsView(onReplayTour: {
+                openCameraOnSettingsDismiss = true
+                showingSettings = false
+            })
+        }
         .sheet(isPresented: $showingProfilePicker) {
             HomeProfilePickerSheet(selectedProfile: profileBinding)
         }
