@@ -83,6 +83,7 @@ private struct WelcomeScreen: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 160, height: 160)
+                .shadow(color: .black.opacity(0.25), radius: 16, x: 0, y: 4)
                 .padding(.bottom, 20)
 
             // Two-tone wordmark: "Color" dark, "Sight" purple
