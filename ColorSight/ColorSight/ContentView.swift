@@ -160,9 +160,7 @@ private struct SplashView: View {
                 Image("AppLogoImage")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 150, height: 150)
-                    .clipShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
-                    .shadow(color: .black.opacity(0.15), radius: 16, x: 0, y: 6)
+                    .frame(width: 160, height: 160)
 
                 HStack(spacing: 0) {
                     Text("Color").foregroundStyle(.primary)

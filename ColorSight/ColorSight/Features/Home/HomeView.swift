@@ -83,8 +83,6 @@ private struct WelcomeScreen: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 160, height: 160)
-                .clipShape(RoundedRectangle(cornerRadius: 36, style: .continuous))
-                .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 4)
                 .padding(.bottom, 20)
 
             // Two-tone wordmark: "Color" dark, "Sight" purple
@@ -125,6 +123,8 @@ private struct WelcomeScreen: View {
             .padding(.horizontal, 32)
             .padding(.bottom, 48)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemBackground).ignoresSafeArea())
     }
 }
 
