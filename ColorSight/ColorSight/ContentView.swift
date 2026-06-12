@@ -5,15 +5,31 @@ import AVFoundation
 /// First-run CVD profile selection is handled inside HomeView itself.
 struct ContentView: View {
 
+    @State private var showSplash = true
     @State private var authStatus: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
 
     var body: some View {
-        cameraGate
-            // Re-check camera permission whenever the app returns to the foreground.
-            // Covers the case where the user went to Settings, granted access, and came back.
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-                authStatus = AVCaptureDevice.authorizationStatus(for: .video)
+        ZStack {
+            cameraGate
+
+            if showSplash {
+                SplashView()
+                    .transition(.opacity)
+                    .zIndex(1)
             }
+        }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                withAnimation(.easeOut(duration: 0.45)) {
+                    showSplash = false
+                }
+            }
+        }
+        // Re-check camera permission whenever the app returns to the foreground.
+        // Covers the case where the user went to Settings, granted access, and came back.
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            authStatus = AVCaptureDevice.authorizationStatus(for: .video)
+        }
     }
 
     // MARK: - Camera permission gate
@@ -130,5 +146,30 @@ private struct PermissionRestrictedView: View {
                 .padding(.horizontal, 32)
         }
         .padding()
+    }
+}
+
+// MARK: - Splash screen (shown on every cold launch, fades out after ~1.5 s)
+
+private struct SplashView: View {
+    var body: some View {
+        ZStack {
+            Color(.systemBackground).ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                Image("AppLogoImage")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 150, height: 150)
+                    .clipShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
+                    .shadow(color: .black.opacity(0.15), radius: 16, x: 0, y: 6)
+
+                HStack(spacing: 0) {
+                    Text("Color").foregroundStyle(.primary)
+                    Text("Sight").foregroundStyle(Color.purple)
+                }
+                .font(.system(size: 36, weight: .bold))
+            }
+        }
     }
 }
