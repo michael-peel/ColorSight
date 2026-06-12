@@ -246,11 +246,13 @@ struct CameraView: View {
         //   • Touch down  → schedule a DispatchWorkItem for 0.45 s from now
         //   • Finger lifts before 0.45 s → cancel work item, treat as tap (freeze toggle)
         //   • Work item fires (finger still down after 0.45 s) → long press → refocus
+        // including: .none while the tour is visible so the DragGesture recognizer is fully
+        // disabled — guarding inside the handlers is too late; the recognizer wins gesture
+        // competition before handlers run, which blocks the overlay's Next/Got-it buttons.
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in
-                    guard !showingTooltip else { return }
-                    guard pressWorkItem == nil else { return }   // already started
+                    guard pressWorkItem == nil else { return }
                     let work = DispatchWorkItem {
                         pressWorkItem = nil
                         viewModel.refocus()
@@ -263,14 +265,14 @@ struct CameraView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: work)
                 }
                 .onEnded { _ in
-                    guard !showingTooltip else { return }
-                    guard let work = pressWorkItem else { return }  // long press fired
+                    guard let work = pressWorkItem else { return }
                     work.cancel()
                     pressWorkItem = nil
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                         viewModel.isFrozen.toggle()
                     }
-                }
+                },
+            including: showingTooltip ? .none : .all
         )
         .sheet(isPresented: $showingSettings) {
             SettingsView()
