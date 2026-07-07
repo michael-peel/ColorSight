@@ -160,13 +160,18 @@ private struct SplashView: View {
                 Image("AppLogoImage")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 160, height: 160)
+                    .frame(width: 200, height: 200)
 
                 HStack(spacing: 0) {
                     Text("Color").foregroundStyle(.primary)
                     Text("Sight").foregroundStyle(Color.purple)
                 }
                 .font(.system(size: 36, weight: .bold))
+
+                Text("Identify Colors. Live Clearly.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
         }
     }

@@ -7,7 +7,7 @@
           "value" : "light"
         }
       ],
-      "filename" : "AppLogoImage_Light.png",
+      "filename" : "AppLogoImage-light.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
@@ -18,12 +18,12 @@
           "value" : "dark"
         }
       ],
-      "filename" : "AppLogoImage_Dark.png",
+      "filename" : "AppLogoImage-dark.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
-      "filename" : "AppLogoImage_Light.png",
+      "filename" : "AppLogoImage-light.png",
       "idiom" : "universal",
       "scale" : "1x"
     }
