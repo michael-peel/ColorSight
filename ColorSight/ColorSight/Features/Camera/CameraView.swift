@@ -114,10 +114,10 @@ struct CameraView: View {
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isHueIsolationActive)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingIsolationBanner)
 
-            // MARK: - Top bar (eyedropper left, settings right)
+            // MARK: - Top bar (eyedropper left, settings + torch right)
             VStack {
-                HStack {
-                    // Home + Eyedropper + Torch — top-left
+                HStack(alignment: .top) {
+                    // Home + Eyedropper + Hue Isolation — top-left
                     HStack(spacing: 10) {
                         // Dismiss camera and return to the home screen
                         Button {
@@ -150,24 +150,6 @@ struct CameraView: View {
                                         value: [.eyedropper: geo.frame(in: .global)])
                                 })
                         }
-
-                        Button {
-                            viewModel.toggleTorch()
-                        } label: {
-                            Image(systemName: viewModel.isTorchOn
-                                  ? "flashlight.on.fill"
-                                  : "flashlight.off.fill")
-                                .font(.title3)
-                                .foregroundStyle(viewModel.isTorchOn ? Color.yellow : .white)
-                                .padding(10)
-                                .background(.ultraThinMaterial, in: Circle())
-                                .shadow(color: .black.opacity(0.3), radius: 4)
-                                .background(GeometryReader { geo in
-                                    Color.clear.preference(key: ButtonFramesKey.self,
-                                        value: [.torch: geo.frame(in: .global)])
-                                })
-                        }
-                        .animation(.easeInOut(duration: 0.15), value: viewModel.isTorchOn)
 
                         Button {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -206,28 +188,58 @@ struct CameraView: View {
 
                     Spacer()
 
-                    // History + Settings — top-right
-                    HStack(spacing: 10) {
+                    // History — top-right; Settings + Torch stacked in a column beneath it.
+                    // Icons are .resizable() + aspectRatio(.fit) into a fixed 20x20 frame so
+                    // History/Settings/Torch render as identically sized circles — a plain
+                    // .frame() on a font-sized SF Symbol only reserves layout space, it doesn't
+                    // rescale the glyph, so differing symbol bounding boxes still look uneven.
+                    HStack(alignment: .top, spacing: 10) {
                         Button {
                             showingHistory = true
                         } label: {
                             Image(systemName: "clock.arrow.circlepath")
-                                .font(.title3)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 20, height: 20)
                                 .foregroundStyle(.white)
                                 .padding(10)
                                 .background(.ultraThinMaterial, in: Circle())
                                 .shadow(color: .black.opacity(0.3), radius: 4)
                         }
 
-                        Button {
-                            showingSettings = true
-                        } label: {
-                            Image(systemName: "gearshape.fill")
-                                .font(.title3)
-                                .foregroundStyle(.white)
-                                .padding(10)
-                                .background(.ultraThinMaterial, in: Circle())
-                                .shadow(color: .black.opacity(0.3), radius: 4)
+                        VStack(alignment: .center, spacing: 10) {
+                            Button {
+                                showingSettings = true
+                            } label: {
+                                Image(systemName: "gearshape.fill")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 20, height: 20)
+                                    .foregroundStyle(.white)
+                                    .padding(10)
+                                    .background(.ultraThinMaterial, in: Circle())
+                                    .shadow(color: .black.opacity(0.3), radius: 4)
+                            }
+
+                            Button {
+                                viewModel.toggleTorch()
+                            } label: {
+                                Image(systemName: viewModel.isTorchOn
+                                      ? "flashlight.on.fill"
+                                      : "flashlight.off.fill")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 20, height: 20)
+                                    .foregroundStyle(viewModel.isTorchOn ? Color.yellow : .white)
+                                    .padding(10)
+                                    .background(.ultraThinMaterial, in: Circle())
+                                    .shadow(color: .black.opacity(0.3), radius: 4)
+                                    .background(GeometryReader { geo in
+                                        Color.clear.preference(key: ButtonFramesKey.self,
+                                            value: [.torch: geo.frame(in: .global)])
+                                    })
+                            }
+                            .animation(.easeInOut(duration: 0.15), value: viewModel.isTorchOn)
                         }
                     }
                     .padding(.trailing, 16)
@@ -556,8 +568,8 @@ private struct CameraTooltipOverlay: View {
     private let steps: [(id: TooltipButtonID, label: String)] = [
         (.chevron,    "Go back to the home screen"),
         (.eyedropper, "Open a photo to sample colors"),
-        (.torch,      "Toggle the flashlight"),
         (.palette,    "Hue Isolation — highlight one color, gray out the rest"),
+        (.torch,      "Toggle the flashlight"),
     ]
 
     private var isLastStep:   Bool            { currentStep == steps.count - 1 }
