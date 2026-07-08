@@ -43,6 +43,7 @@ final class CameraViewModel: NSObject {
 
     var identifiedColor: IdentifiedColor?
     var isTorchOn = false
+    var zoomFactor: CGFloat = 1.0
 
     var isFrozen = false {
         didSet {
@@ -108,12 +109,15 @@ final class CameraViewModel: NSObject {
         let threadState = self.threadState
         sessionQueue.async { [weak self] in
             guard let self, session.isRunning else { return }
-            // Turn off the torch before stopping the session.
+            // Turn off the torch and reset zoom before stopping the session, so the
+            // next time the camera opens it starts from a predictable, un-zoomed state.
             Self.setTorch(false, device: threadState.captureDevice)
+            Self.setZoom(1.0, device: threadState.captureDevice)
             session.stopRunning()
             DispatchQueue.main.async {
                 self.sessionIsRunning = false
                 self.isTorchOn = false
+                self.zoomFactor = 1.0
             }
         }
     }
@@ -135,6 +139,40 @@ final class CameraViewModel: NSObject {
         do {
             try device.lockForConfiguration()
             device.torchMode = on ? .on : .off
+            device.unlockForConfiguration()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Live pinch-to-zoom entry point. Sets `videoZoomFactor` directly on the capture
+    /// device, so the CMSampleBuffer the color-sampling delegate reads already reflects
+    /// the zoomed frame — the center-pixel and area-average sampling in
+    /// `captureOutput(_:didOutput:from:)` need no changes to stay correct at any zoom level.
+    func setZoomFactor(_ factor: CGFloat) {
+        let threadState = self.threadState
+        sessionQueue.async { [weak self] in
+            guard let self, let device = threadState.captureDevice else { return }
+            let maxZoom = min(device.maxAvailableVideoZoomFactor, Self.maxUsableZoomFactor)
+            let clamped = min(max(factor, device.minAvailableVideoZoomFactor), maxZoom)
+            guard Self.setZoom(clamped, device: device) else { return }
+            DispatchQueue.main.async { self.zoomFactor = clamped }
+        }
+    }
+
+    /// Beyond ~5x, digital zoom on the single wide-angle lens is heavily interpolated —
+    /// capped here so zoomed color samples stay meaningfully accurate.
+    private static let maxUsableZoomFactor: CGFloat = 5.0
+
+    /// Sets the zoom factor. Returns true if the change succeeded. Caller is
+    /// responsible for clamping to the device's supported range.
+    @discardableResult
+    nonisolated private static func setZoom(_ factor: CGFloat, device: AVCaptureDevice?) -> Bool {
+        guard let device else { return false }
+        do {
+            try device.lockForConfiguration()
+            device.videoZoomFactor = factor
             device.unlockForConfiguration()
             return true
         } catch {

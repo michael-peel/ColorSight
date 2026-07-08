@@ -18,6 +18,12 @@ struct CameraView: View {
     @State private var pressWorkItem:    DispatchWorkItem? = nil
     @State private var sharePayload:     SharePayload?
 
+    // Pinch-to-zoom state
+    @State private var isPinching           = false
+    @State private var pinchBaseZoomFactor: CGFloat = 1.0
+    @State private var showingZoomPill      = false
+    @State private var zoomPillHideWorkItem: DispatchWorkItem?
+
     @AppStorage("hasSeenCameraTooltip")       private var hasSeenCameraTooltip = false
     @AppStorage("hueIsolationActivationCount") private var hueIsolationActivationCount = 0
     @State private var showingTooltip = false
@@ -63,6 +69,22 @@ struct CameraView: View {
                     .padding(.vertical, 6)
                     .background(.ultraThinMaterial, in: Capsule())
                     .offset(y: 36)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    .allowsHitTesting(false)
+            }
+
+            // MARK: - Zoom level pill (appears below crosshair while pinching)
+            // Offset clears the region-mode dashed ring (70pt diameter, so 35pt radius)
+            // plus the pill's own height, so it never overlaps the crosshair in either
+            // direct-sample or region-sample mode.
+            if showingZoomPill {
+                Text(String(format: "%.1f×", viewModel.zoomFactor))
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .offset(y: 60)
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
                     .allowsHitTesting(false)
             }
@@ -252,7 +274,7 @@ struct CameraView: View {
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in
-                    guard pressWorkItem == nil else { return }
+                    guard !isPinching, pressWorkItem == nil else { return }
                     let work = DispatchWorkItem {
                         pressWorkItem = nil
                         viewModel.refocus()
@@ -268,9 +290,39 @@ struct CameraView: View {
                     guard let work = pressWorkItem else { return }
                     work.cancel()
                     pressWorkItem = nil
+                    guard !isPinching else { return }
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                         viewModel.isFrozen.toggle()
                     }
+                },
+            including: showingTooltip ? .none : .all
+        )
+        // Pinch-to-zoom. Runs simultaneously with the tap/long-press DragGesture above;
+        // starting a pinch cancels any pending tap-freeze/long-press-refocus so a second
+        // finger landing mid-tap doesn't also trigger those. Zoom is applied directly to
+        // the capture device (see CameraViewModel.setZoomFactor), so the crosshair and
+        // area-average color sampling automatically track the zoomed frame — no separate
+        // coordinate math needed here.
+        .simultaneousGesture(
+            MagnificationGesture()
+                .onChanged { value in
+                    if !isPinching {
+                        isPinching = true
+                        pinchBaseZoomFactor = viewModel.zoomFactor
+                        pressWorkItem?.cancel()
+                        pressWorkItem = nil
+                        zoomPillHideWorkItem?.cancel()
+                        withAnimation(.easeIn(duration: 0.15)) { showingZoomPill = true }
+                    }
+                    viewModel.setZoomFactor(pinchBaseZoomFactor * value)
+                }
+                .onEnded { _ in
+                    isPinching = false
+                    let work = DispatchWorkItem {
+                        withAnimation(.easeOut(duration: 0.3)) { showingZoomPill = false }
+                    }
+                    zoomPillHideWorkItem = work
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.9, execute: work)
                 },
             including: showingTooltip ? .none : .all
         )
