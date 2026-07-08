@@ -248,7 +248,7 @@ extension CameraViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
         // Sample the center — either a single pixel or an averaged 21×21 region.
         // UserDefaults is thread-safe; reading a Bool here is fast (~µs).
         let r: UInt8, g: UInt8, b: UInt8
-        if UserDefaults.standard.bool(forKey: "regionSamplingEnabled") {
+        if (UserDefaults.standard.object(forKey: "regionSamplingEnabled") as? Bool) ?? true {
             (r, g, b) = Self.averageRegion(
                 base: base, width: width, height: height,
                 bytesPerRow: bytesPerRow,

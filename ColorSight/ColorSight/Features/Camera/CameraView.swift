@@ -9,7 +9,7 @@ struct CameraView: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var viewModel         = CameraViewModel()
-    @AppStorage("regionSamplingEnabled") private var regionSamplingEnabled = false
+    @AppStorage("regionSamplingEnabled") private var regionSamplingEnabled = true
 
     @State private var showingSettings   = false
     @State private var showingEyedropper = false

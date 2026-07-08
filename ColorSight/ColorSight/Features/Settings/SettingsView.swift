@@ -15,7 +15,7 @@ struct SettingsView: View {
 
     @AppStorage("hapticsEnabled")        private var hapticsEnabled        = true
     @AppStorage("voiceFeedbackEnabled")  private var voiceFeedbackEnabled  = true
-    @AppStorage("regionSamplingEnabled") private var regionSamplingEnabled = false
+    @AppStorage("regionSamplingEnabled") private var regionSamplingEnabled = true
     @AppStorage("hasSeenCameraTooltip")  private var hasSeenCameraTooltip  = false
 
     var body: some View {
@@ -46,7 +46,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Preferences")
                 } footer: {
-                    Text("Sample Region averages a small area of pixels instead of a single point, giving smoother, more stable readings on textured or patterned surfaces.")
+                    Text("Recommended for clothing and textured surfaces. Averages a small area of pixels for more stable readings.")
                 }
 
                 // MARK: About
