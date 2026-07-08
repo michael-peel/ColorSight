@@ -156,6 +156,12 @@ private struct SplashView: View {
         ZStack {
             Color(.systemBackground).ignoresSafeArea()
 
+            Image("SplashWaveImage")
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .ignoresSafeArea()
+
             VStack(spacing: 20) {
                 Image("AppLogoImage")
                     .resizable()
