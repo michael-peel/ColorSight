@@ -17,14 +17,20 @@ private final class CameraThreadState: @unchecked Sendable {
     // Hue isolation — written on MainActor, read on sampleQueue
     nonisolated(unsafe) var isHueIsolationActive = false
     nonisolated(unsafe) var selectedHueFamily    = HueFamily.red
-    // Set when isolation activates; nil when off. enqueue() is thread-safe.
+    // High contrast — written on MainActor, read on sampleQueue. Mutually exclusive
+    // with hue isolation; both share the display layer/output buffer below since only
+    // one display filter is ever active at a time.
+    nonisolated(unsafe) var isHighContrastActive = false
+    // Set when either display filter activates; nil when both are off. enqueue() is
+    // thread-safe.
     nonisolated(unsafe) var isolationDisplayLayer: AVSampleBufferDisplayLayer?
-    // Allocated lazily on first isolated frame; reused for the session lifetime
+    // Allocated lazily on first filtered frame; reused for the session lifetime
     nonisolated(unsafe) var isolationOutputBuffer: CVPixelBuffer?   // sampleQueue only
     // Frame counter for periodic timing prints
     nonisolated(unsafe) var isolationFrameCount: UInt64 = 0         // sampleQueue only
-    // @unchecked Sendable service; safe to call from sampleQueue
-    let hueIsolationService = HueIsolationService()
+    // @unchecked Sendable services; safe to call from sampleQueue
+    let hueIsolationService  = HueIsolationService()
+    let highContrastService  = HighContrastService()
 }
 
 // MARK: - ViewModel
@@ -64,9 +70,11 @@ final class CameraViewModel: NSObject {
         didSet {
             threadState.isHueIsolationActive = isHueIsolationActive
             if isHueIsolationActive {
+                // Only one display filter can drive the layer at a time.
+                if isHighContrastActive { isHighContrastActive = false }
                 // Give sampleQueue a reference so it can enqueue without a main-thread hop.
                 threadState.isolationDisplayLayer = isolationDisplayLayer
-            } else {
+            } else if !isHighContrastActive {
                 threadState.isolationDisplayLayer = nil
                 isolationDisplayLayer.sampleBufferRenderer
                     .flush(removingDisplayedImage: true, completionHandler: nil)
@@ -76,8 +84,28 @@ final class CameraViewModel: NSObject {
     var selectedHueFamily: HueFamily = .red {
         didSet { threadState.selectedHueFamily = selectedHueFamily }
     }
+
+    /// Boosts on-screen brightness/contrast for visibility in low light — hue and
+    /// saturation are untouched, so identified colors never shift (see
+    /// HighContrastService). Mutually exclusive with hue isolation; both drive the
+    /// same display layer, so only one filter is ever active at a time.
+    var isHighContrastActive = false {
+        didSet {
+            threadState.isHighContrastActive = isHighContrastActive
+            if isHighContrastActive {
+                if isHueIsolationActive { isHueIsolationActive = false }
+                threadState.isolationDisplayLayer = isolationDisplayLayer
+            } else if !isHueIsolationActive {
+                threadState.isolationDisplayLayer = nil
+                isolationDisplayLayer.sampleBufferRenderer
+                    .flush(removingDisplayedImage: true, completionHandler: nil)
+            }
+        }
+    }
+
     /// AVSampleBufferDisplayLayer owned here so sampleQueue can enqueue processed
     /// CVPixelBuffers directly without dispatching to the main thread each frame.
+    /// Shared by hue isolation and high contrast — never both at once.
     let isolationDisplayLayer = AVSampleBufferDisplayLayer()
 
     // MARK: - Internals
@@ -305,9 +333,11 @@ extension CameraViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
             self.identifiedColor = self.colorEngine.identify(r: r, g: g, b: b)
         }
 
-        // Hue isolation filter — applies color-splash effect when mode is active.
-        // GPU kernel writes to outBuffer; we wrap it in a CMSampleBuffer and enqueue
-        // directly on sampleQueue — no main-thread dispatch per frame.
+        // Display filters — hue isolation and high contrast are mutually exclusive,
+        // both share isolationOutputBuffer/isolationDisplayLayer. GPU kernel writes to
+        // outBuffer; we wrap it in a CMSampleBuffer and enqueue directly on
+        // sampleQueue — no main-thread dispatch per frame. Neither filter ever touches
+        // `pixelBuffer` itself, so the color sample taken above is always unaffected.
         if threadState.isHueIsolationActive {
             threadState.isolationFrameCount &+= 1
             if threadState.isolationOutputBuffer == nil {
@@ -325,6 +355,21 @@ extension CameraViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
                 if threadState.isolationFrameCount.isMultiple(of: 30) {
                     print("[HueIsolation] \(String(format: "%.1f", ms)) ms/frame")
                 }
+                if wrote, let sampleBuf = Self.makeSampleBuffer(from: outBuffer) {
+                    threadState.isolationDisplayLayer?.enqueue(sampleBuf)
+                }
+            }
+        } else if threadState.isHighContrastActive {
+            threadState.isolationFrameCount &+= 1
+            if threadState.isolationOutputBuffer == nil {
+                threadState.isolationOutputBuffer =
+                    HueIsolationService.makeOutputBuffer(matchingFormat: pixelBuffer)
+            }
+            if let outBuffer = threadState.isolationOutputBuffer {
+                let wrote = threadState.highContrastService.process(
+                    input:  pixelBuffer,
+                    output: outBuffer
+                )
                 if wrote, let sampleBuf = Self.makeSampleBuffer(from: outBuffer) {
                     threadState.isolationDisplayLayer?.enqueue(sampleBuf)
                 }

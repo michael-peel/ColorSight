@@ -46,11 +46,11 @@ struct CameraView: View {
             // MARK: - Live preview (full screen)
             CameraPreviewView(session: viewModel.session)
 
-            // MARK: - Hue isolation overlay
-            // Sits above the raw preview so the color-splash effect is visible,
-            // but below the crosshair and all controls.
-            // MTKView renders the output MTLTexture directly — no UIImage conversion.
-            if viewModel.isHueIsolationActive {
+            // MARK: - Display filter overlay (hue isolation or high contrast)
+            // Sits above the raw preview so the active filter is visible, but below the
+            // crosshair and all controls. Hue isolation and high contrast are mutually
+            // exclusive and share the same display layer (see CameraViewModel).
+            if viewModel.isHueIsolationActive || viewModel.isHighContrastActive {
                 HueIsolationDisplayView(displayLayer: viewModel.isolationDisplayLayer)
                     .transition(.opacity)
             }
@@ -240,6 +240,28 @@ struct CameraView: View {
                                     })
                             }
                             .animation(.easeInOut(duration: 0.15), value: viewModel.isTorchOn)
+
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    viewModel.isHighContrastActive.toggle()
+                                }
+                            } label: {
+                                Image(systemName: "circle.lefthalf.filled")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 20, height: 20)
+                                    .foregroundStyle(viewModel.isHighContrastActive ? Color.accentColor : .white)
+                                    .padding(10)
+                                    .background(.ultraThinMaterial, in: Circle())
+                                    .shadow(color: .black.opacity(0.3), radius: 4)
+                                    .background(GeometryReader { geo in
+                                        Color.clear.preference(key: ButtonFramesKey.self,
+                                            value: [.highContrast: geo.frame(in: .global)])
+                                    })
+                            }
+                            .accessibilityLabel("High Contrast Mode")
+                            .accessibilityValue(viewModel.isHighContrastActive ? "On" : "Off")
+                            .animation(.easeInOut(duration: 0.2), value: viewModel.isHighContrastActive)
                         }
                     }
                     .padding(.trailing, 16)
@@ -547,7 +569,7 @@ private struct CrosshairView: View {
 // MARK: - Preference key for capturing toolbar button frames
 
 private enum TooltipButtonID: String {
-    case chevron, eyedropper, torch, palette
+    case chevron, eyedropper, torch, palette, highContrast
 }
 
 private struct ButtonFramesKey: PreferenceKey {
@@ -566,10 +588,11 @@ private struct CameraTooltipOverlay: View {
     @State private var currentStep = 0
 
     private let steps: [(id: TooltipButtonID, label: String)] = [
-        (.chevron,    "Go back to the home screen"),
-        (.eyedropper, "Open a photo to sample colors"),
-        (.palette,    "Hue Isolation — highlight one color, gray out the rest"),
-        (.torch,      "Toggle the flashlight"),
+        (.chevron,      "Go back to the home screen"),
+        (.eyedropper,   "Open a photo to sample colors"),
+        (.palette,      "Hue Isolation — highlight one color, gray out the rest"),
+        (.torch,        "Toggle the flashlight"),
+        (.highContrast, "High Contrast — boosts visibility in low light"),
     ]
 
     private var isLastStep:   Bool            { currentStep == steps.count - 1 }
