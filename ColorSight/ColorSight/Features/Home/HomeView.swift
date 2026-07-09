@@ -390,7 +390,7 @@ private struct MainMenuView: View {
 
                         HStack(spacing: 12) {
                             SecondaryCard(
-                                icon:      "drop.fill",
+                                icon:      "eyedropper.halffull",
                                 iconColor: .blue,
                                 title:     "Eyedropper",
                                 subtitle:  "From a photo",

@@ -182,6 +182,15 @@ MTKView's insertion into the SwiftUI hierarchy blocks the main thread (~100–20
 
 **Metal shader — hue classification** mirrors `HueFamily.matches()` exactly. Both must be kept in sync; `HueFamilyTests.testMetalIndexMatchesCaseOrder()` guards the enum↔shader index alignment.
 
+### High Contrast Mode (low-light visibility filter)
+
+Boosts on-screen brightness/contrast so the preview is usable in dim environments. Mirrors Hue Isolation Mode's GPU/CPU dual-path structure and **shares its display layer** — the two modes are mutually exclusive (toggling one off the other), since only one display filter can drive `isolationDisplayLayer` at a time.
+
+- `HighContrastService` (`HighContrastService.swift` + `HighContrast.metal`, kernel `highContrastEnhance`) boosts only the brightness (V) channel in HSB space — hue/saturation pass through untouched, so an identified color never shifts (blue never reads as purple). Constants: `contrast = 1.35`, `brightnessLift = 0.12`.
+- **Display-only.** `CameraViewModel`'s color-sampling delegate always reads the original, unprocessed `CVPixelBuffer`; the filter only ever writes to the shared `isolationOutputBuffer` that feeds the display layer. Toggling it can never change what color gets identified.
+- `CameraThreadState.isHighContrastActive` / `isHueIsolationActive` — setting one to `true` flips the other to `false`; `isolationDisplayLayer` is only torn down (flushed + nilled) when *both* are off.
+- CPU fallback (`HighContrastService.processCPU`) exists for parity with Hue Isolation but never runs on iOS 26 devices.
+
 ### SwiftData
 Use `@Model` for `ColorSwatch` (history entries). The model context lives in the App entry point and is passed down via `.modelContainer(for:)`.
 
@@ -280,5 +289,8 @@ Currently: **Paid Apple Developer account** (upgraded 2026-05-27)
 | 2026-05-21 | Project initialized. GitHub repo created. Xcode project scaffolded. Camera permission screen working on device. First commit pushed. CLAUDE.md added to repo root. |
 | 2026-05-27 | Removed custom CVD profile (unimplemented). Upgraded to paid Apple Developer account. TestFlight setup in progress. |
 | 2026-06-10 | Implemented Hue Isolation Mode (color-splash filter): Metal compute kernel in HueIsolation.metal, HueIsolationService GPU/CPU pipeline, AVSampleBufferDisplayLayer display path with zero main-thread dispatch per frame. Added ColorSightTests target (30 unit tests, all passing on device). |
+| 2026-06-11 | Redesigned home screen; replaced camera tooltip with step-by-step coach marks (feature tour), then fixed several tour bugs (touch passthrough/camera freeze on save, DragGesture conflict while overlay visible, tooltip not showing on replay). Added hue isolation card + profile picker to home screen; tapping a swatch now shows its color name. Fixed pulsing ring animation. Removed black/white/gray from the hue isolation picker; bumped version to 1.2. Replaced app icon and welcome-screen logo with new brand image; added branded splash screen on cold launch; added light/dark logo variants and fixed dark-mode logo display; bumped build number to 2. |
+| 2026-07-07 | Replaced app icon and in-app logo with professional designer assets (new C-arc camera mark, light/white-bg + dark/navy-bg `AppLogoImage` variants); removed old placeholder logo files. |
+| 2026-07-08 | Defaulted Sample Region to ON for better accuracy on textured surfaces. Added splash screen color waves (light/dark `SplashWaveImage`) and fixed a dark-mode logo size mismatch. Added pinch-to-zoom to the camera view (`AVCaptureDevice.videoZoomFactor` driven directly, so sampling stays accurate at any zoom). Moved the flashlight toggle to top-right stacked under Settings, with History/Settings/Torch icons normalized to a fixed 20×20 frame. Implemented High Contrast Mode (low-light visibility filter) — see architecture section above; mutually exclusive with Hue Isolation, shares its display layer. Changed the menu screen's Eyedropper icon from `drop.fill` to `eyedropper.halffull` to match the camera screen. Verified the icon change by building and running on device via `devicectl`. |
 
 > Update this table at the end of every working session.
