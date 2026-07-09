@@ -8,6 +8,7 @@ struct EyedropperView: View {
 
     @Environment(\.dismiss)      private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var viewModel     = EyedropperViewModel()
     @State private var pickerItem:   PhotosPickerItem?
@@ -206,59 +207,16 @@ struct EyedropperView: View {
         if let color = viewModel.identifiedColor {
             let note = CVDColorContext.contextNote(for: color.simpleName, hex: color.hex, r: color.rgb.r, g: color.rgb.g, b: color.rgb.b, profile: activeCVDProfile)
 
-            HStack(spacing: 0) {
-                // Swatch
-                color.swiftUIColor
-                    .frame(width: 100)
-                    .clipShape(
-                        .rect(
-                            topLeadingRadius: 16,
-                            bottomLeadingRadius: 16,
-                            bottomTrailingRadius: 0,
-                            topTrailingRadius: 0
-                        )
-                    )
-
-                // Text info
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(color.simpleName)
-                        .font(.title2.bold())
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-
-                    if color.name != color.simpleName {
-                        Text(color.name)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    }
-
-                    HStack(spacing: 12) {
-                        Text(color.hex)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                        Text(color.rgbDisplayString)
-                            .font(.system(.caption2, design: .monospaced))
-                            .foregroundStyle(.tertiary)
-                    }
-
-                    if let note {
-                        Text(note)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
+            // See CameraView for why the layout branches and the range is capped —
+            // same fix, same reasoning, applied here for the eyedropper's card.
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    accessibilityColorCard(color: color, note: note)
+                } else {
+                    standardColorCard(color: color, note: note)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(minHeight: 88, maxHeight: 180)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-            .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
-            .animation(.easeInOut(duration: 0.15), value: color.hex)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
         } else {
             HStack {
                 ProgressView().tint(.white)
@@ -270,6 +228,107 @@ struct EyedropperView: View {
             .frame(height: 70)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
         }
+    }
+
+    /// Default layout: color swatch on the left, text stacked to its right.
+    @ViewBuilder
+    private func standardColorCard(color: IdentifiedColor, note: String?) -> some View {
+        HStack(spacing: 0) {
+            color.swiftUIColor
+                .frame(width: 100)
+                .clipShape(
+                    .rect(
+                        topLeadingRadius: 16,
+                        bottomLeadingRadius: 16,
+                        bottomTrailingRadius: 0,
+                        topTrailingRadius: 0
+                    )
+                )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(color.simpleName)
+                    .font(.title2.bold())
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+
+                if color.name != color.simpleName {
+                    Text(color.name)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+
+                HStack(spacing: 12) {
+                    Text(color.hex)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                    Text(color.rgbDisplayString)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                }
+
+                if let note {
+                    Text(note)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(minHeight: 88, maxHeight: 180)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+        .animation(.easeInOut(duration: 0.15), value: color.hex)
+    }
+
+    /// Accessibility-size layout: a small swatch chip beside the title, everything
+    /// else stacked full-width below — see CameraView's variant for the rationale.
+    @ViewBuilder
+    private func accessibilityColorCard(color: IdentifiedColor, note: String?) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
+                color.swiftUIColor
+                    .frame(width: 44, height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                Text(color.simpleName)
+                    .font(.title3.bold())
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 0)
+            }
+
+            if color.name != color.simpleName {
+                Text(color.name)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 12) {
+                Text(color.hex)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                Text(color.rgbDisplayString)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+            }
+
+            if let note {
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+        .animation(.easeInOut(duration: 0.15), value: color.hex)
     }
 
     // MARK: - Top bar

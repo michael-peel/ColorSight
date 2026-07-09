@@ -101,6 +101,7 @@ private struct SwatchRow: View {
     let swatch: ColorSwatch
     @State private var copied       = false
     @State private var sharePayload: SharePayload?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     // Same UserDefaults key CVDProfile.save()/load() use, so this stays in sync
     // whenever the profile changes in Settings.
@@ -126,6 +127,27 @@ private struct SwatchRow: View {
     }
 
     var body: some View {
+        // Same reasoning as CameraView/EyedropperView: at accessibility text sizes
+        // a fixed-width swatch squeezes wrapped text, so stack vertically instead,
+        // and cap the range so a row never grows unreasonably tall.
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                accessibilityRow
+            } else {
+                standardRow
+            }
+        }
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(swatch.simpleName), \(swatch.hex), saved \(swatch.timestamp.formatted(.relative(presentation: .named)))")
+        .sheet(item: $sharePayload) { payload in
+            ActivityView(items: payload.items, subject: payload.subject)
+        }
+    }
+
+    // MARK: - Default layout
+
+    private var standardRow: some View {
         HStack(spacing: 14) {
 
             // Color swatch block
@@ -176,45 +198,105 @@ private struct SwatchRow: View {
 
             // Copy + Share buttons
             HStack(spacing: 16) {
-                // Copy hex
-                Button {
-                    UIPasteboard.general.string = swatch.hex
-                    withAnimation(.spring(response: 0.2)) { copied = true }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
-                        withAnimation(.spring(response: 0.2)) { copied = false }
-                    }
-                } label: {
-                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                        .font(.callout)
-                        .foregroundStyle(copied ? Color.green : Color.secondary)
-                        .frame(width: 28, height: 28)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(copied ? "Copied" : "Copy hex code")
-
-                // Share swatch image
-                Button {
-                    let img = SwatchImageRenderer.render(swatch: swatch)
-                    sharePayload = SharePayload(
-                        items:   [img, "\(swatch.simpleName) – \(swatch.hex)"],
-                        subject: swatch.simpleName
-                    )
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28, height: 28)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Share \(swatch.simpleName)")
+                copyButton
+                shareButton
             }
         }
         .padding(.vertical, 2)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(swatch.simpleName), \(swatch.hex), saved \(swatch.timestamp.formatted(.relative(presentation: .named)))")
-        .sheet(item: $sharePayload) { payload in
-            ActivityView(items: payload.items, subject: payload.subject)
+    }
+
+    // MARK: - Accessibility-size layout
+
+    /// Swatch + title on top, everything else stacked full-width below, and the
+    /// copy/share buttons moved to their own row with visible labels now that
+    /// there's room — see CameraView's accessibility card for the same rationale.
+    private var accessibilityRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(swatch.swiftUIColor)
+                    .frame(width: 44, height: 44)
+                    .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+
+                Text(primaryText)
+                    .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 0)
+            }
+
+            if swatch.name != swatch.simpleName {
+                Text(swatch.name)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 6) {
+                Text(swatch.hex)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+
+                Text("·")
+                    .foregroundStyle(.tertiary)
+
+                Text(swatch.timestamp, style: .relative)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+
+            if let contextNote {
+                Text(contextNote)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let confusionWarning {
+                ConfusionWarningBadge(text: confusionWarning)
+            }
+
+            HStack(spacing: 20) {
+                copyButton
+                shareButton
+            }
+            .padding(.top, 2)
         }
+        .padding(.vertical, 6)
+    }
+
+    // MARK: - Shared buttons
+
+    private var copyButton: some View {
+        Button {
+            UIPasteboard.general.string = swatch.hex
+            withAnimation(.spring(response: 0.2)) { copied = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+                withAnimation(.spring(response: 0.2)) { copied = false }
+            }
+        } label: {
+            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                .font(.callout)
+                .foregroundStyle(copied ? Color.green : Color.secondary)
+                .frame(width: 28, height: 28)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(copied ? "Copied" : "Copy hex code")
+    }
+
+    private var shareButton: some View {
+        Button {
+            let img = SwatchImageRenderer.render(swatch: swatch)
+            sharePayload = SharePayload(
+                items:   [img, "\(swatch.simpleName) – \(swatch.hex)"],
+                subject: swatch.simpleName
+            )
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 28)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Share \(swatch.simpleName)")
     }
 }
 

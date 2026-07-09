@@ -7,6 +7,7 @@ struct CameraView: View {
 
     @Environment(\.dismiss)      private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var viewModel         = CameraViewModel()
     @AppStorage("regionSamplingEnabled") private var regionSamplingEnabled = true
@@ -440,62 +441,141 @@ struct CameraView: View {
                 ? "\(CVDColorContext.brightnessLabel(r: color.rgb.r, g: color.rgb.g, b: color.rgb.b)) — \(color.simpleName)"
                 : color.simpleName
 
-            HStack(spacing: 0) {
-                // Swatch
-                color.swiftUIColor
-                    .frame(width: 100)
-                    .clipShape(
-                        .rect(
-                            topLeadingRadius: 16,
-                            bottomLeadingRadius: 16,
-                            bottomTrailingRadius: 0,
-                            topTrailingRadius: 0
-                        )
-                    )
-
-                // Text info
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(primaryText)
-                        .font(.title2.bold())
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-
-                    if color.name != color.simpleName {
-                        Text(color.name)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    }
-
-                    HStack(spacing: 12) {
-                        Text(color.hex)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
-
-                        Text(color.rgbDisplayString)
-                            .font(.system(.caption2, design: .monospaced))
-                            .foregroundStyle(.tertiary)
-                    }
-
-                    if let note {
-                        Text(note)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-
-                    if let warning {
-                        ConfusionWarningBadge(text: warning)
-                    }
+            // At accessibility text sizes, a fixed 100pt-wide side swatch leaves too
+            // little room for wrapped text, so we stack the card vertically instead.
+            // Either way, the Dynamic Type range is capped at .accessibility2 below —
+            // otherwise the card would keep growing until it swallowed the screen,
+            // the exact bug we hit before adding the CVD notes/badges.
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    accessibilityColorCard(color: color, primaryText: primaryText, note: note, warning: warning)
+                } else {
+                    standardColorCard(color: color, primaryText: primaryText, note: note, warning: warning)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
 
-                // Share button — visible only when frozen
-                // (lock indicator already shown in the crosshair ring)
+        } else {
+            HStack {
+                ProgressView().tint(.white)
+                Text("Identifying color…")
+                    .font(.body)
+                    .foregroundStyle(.white)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 70)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        }
+    }
+
+    /// Default layout: color swatch on the left, text stacked to its right.
+    @ViewBuilder
+    private func standardColorCard(color: IdentifiedColor, primaryText: String, note: String?, warning: String?) -> some View {
+        HStack(spacing: 0) {
+            color.swiftUIColor
+                .frame(width: 100)
+                .clipShape(
+                    .rect(
+                        topLeadingRadius: 16,
+                        bottomLeadingRadius: 16,
+                        bottomTrailingRadius: 0,
+                        topTrailingRadius: 0
+                    )
+                )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(primaryText)
+                    .font(.title2.bold())
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+
+                if color.name != color.simpleName {
+                    Text(color.name)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+
+                HStack(spacing: 12) {
+                    Text(color.hex)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+
+                    Text(color.rgbDisplayString)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                }
+
+                if let note {
+                    Text(note)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                if let warning {
+                    ConfusionWarningBadge(text: warning)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Share button — visible only when frozen
+            // (lock indicator already shown in the crosshair ring)
+            if viewModel.isFrozen {
+                Button {
+                    let img = SwatchImageRenderer.render(color: color)
+                    sharePayload = SharePayload(
+                        items:   [img, "\(color.simpleName) – \(color.hex)"],
+                        subject: color.simpleName
+                    )
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.callout)
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 12)
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .frame(minHeight: 88, maxHeight: 180)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(
+                    viewModel.isFrozen ? Color.accentColor.opacity(0.6) : Color.clear,
+                    lineWidth: 1.5
+                )
+        )
+        .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+        .animation(.easeInOut(duration: 0.15), value: color.hex)
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: viewModel.isFrozen)
+    }
+
+    /// Accessibility-size layout: a small swatch chip beside the title, everything
+    /// else stacked full-width below so large wrapped text has room to breathe
+    /// instead of being squeezed by a fixed-width side swatch.
+    @ViewBuilder
+    private func accessibilityColorCard(color: IdentifiedColor, primaryText: String, note: String?, warning: String?) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
+                color.swiftUIColor
+                    .frame(width: 44, height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                Text(primaryText)
+                    .font(.title3.bold())
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 0)
+
                 if viewModel.isFrozen {
                     Button {
                         let img = SwatchImageRenderer.render(color: color)
@@ -511,34 +591,48 @@ struct CameraView: View {
                             .background(.ultraThinMaterial, in: Circle())
                     }
                     .buttonStyle(.plain)
-                    .padding(.trailing, 12)
                     .transition(.scale.combined(with: .opacity))
                 }
             }
-            .frame(minHeight: 88, maxHeight: 180)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(
-                        viewModel.isFrozen ? Color.accentColor.opacity(0.6) : Color.clear,
-                        lineWidth: 1.5
-                    )
-            )
-            .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
-            .animation(.easeInOut(duration: 0.15), value: color.hex)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: viewModel.isFrozen)
 
-        } else {
-            HStack {
-                ProgressView().tint(.white)
-                Text("Identifying color…")
-                    .font(.body)
-                    .foregroundStyle(.white)
+            if color.name != color.simpleName {
+                Text(color.name)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 70)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+
+            HStack(spacing: 12) {
+                Text(color.hex)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+
+                Text(color.rgbDisplayString)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+            }
+
+            if let note {
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let warning {
+                ConfusionWarningBadge(text: warning)
+            }
         }
+        .padding(16)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(
+                    viewModel.isFrozen ? Color.accentColor.opacity(0.6) : Color.clear,
+                    lineWidth: 1.5
+                )
+        )
+        .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+        .animation(.easeInOut(duration: 0.15), value: color.hex)
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: viewModel.isFrozen)
     }
 }
 
