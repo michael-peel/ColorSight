@@ -12,6 +12,12 @@ struct CameraView: View {
     // system uses for .body text), so larger-but-not-yet-accessibility text sizes get
     // enough room to avoid truncating the CVD note/warning instead of clipping them.
     @ScaledMetric(relativeTo: .body) private var standardCardMaxHeight: CGFloat = 180
+    // History/Settings/Torch/High Contrast are .resizable() into a fixed frame so
+    // their differing SF Symbol bounding boxes render as identically sized circles
+    // (see the top-bar comment below) — but a plain CGFloat constant doesn't scale
+    // with Dynamic Type the way the font-sized chevron/eyedropper/palette icons do.
+    // Scaling the fixed size itself keeps them matched to each other AND growing.
+    @ScaledMetric(relativeTo: .body) private var topBarIconSize: CGFloat = 20
 
     @State private var viewModel         = CameraViewModel()
     @AppStorage("regionSamplingEnabled") private var regionSamplingEnabled = true
@@ -210,7 +216,7 @@ struct CameraView: View {
                             Image(systemName: "clock.arrow.circlepath")
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
-                                .frame(width: 20, height: 20)
+                                .frame(width: topBarIconSize, height: topBarIconSize)
                                 .foregroundStyle(.white)
                                 .padding(10)
                                 .background(.ultraThinMaterial, in: Circle())
@@ -224,7 +230,7 @@ struct CameraView: View {
                                 Image(systemName: "gearshape.fill")
                                     .resizable()
                                     .aspectRatio(contentMode: .fit)
-                                    .frame(width: 20, height: 20)
+                                    .frame(width: topBarIconSize, height: topBarIconSize)
                                     .foregroundStyle(.white)
                                     .padding(10)
                                     .background(.ultraThinMaterial, in: Circle())
@@ -239,7 +245,7 @@ struct CameraView: View {
                                       : "flashlight.off.fill")
                                     .resizable()
                                     .aspectRatio(contentMode: .fit)
-                                    .frame(width: 20, height: 20)
+                                    .frame(width: topBarIconSize, height: topBarIconSize)
                                     .foregroundStyle(viewModel.isTorchOn ? Color.yellow : .white)
                                     .padding(10)
                                     .background(.ultraThinMaterial, in: Circle())
@@ -259,7 +265,7 @@ struct CameraView: View {
                                 Image(systemName: "circle.lefthalf.filled")
                                     .resizable()
                                     .aspectRatio(contentMode: .fit)
-                                    .frame(width: 20, height: 20)
+                                    .frame(width: topBarIconSize, height: topBarIconSize)
                                     .foregroundStyle(viewModel.isHighContrastActive ? Color.accentColor : .white)
                                     .padding(10)
                                     .background(.ultraThinMaterial, in: Circle())

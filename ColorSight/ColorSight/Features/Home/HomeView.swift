@@ -386,7 +386,7 @@ private struct MainMenuView: View {
                 ScrollView {
                     VStack(spacing: 12) {
                         HeroCameraCard(action: { showingCamera = true })
-                            .frame(height: 210)
+                            .frame(minHeight: 210)
 
                         HStack(spacing: 12) {
                             SecondaryCard(
@@ -404,7 +404,7 @@ private struct MainMenuView: View {
                                 action:    { showingHistory = true }
                             )
                         }
-                        .frame(height: 140)
+                        .frame(minHeight: 140)
 
                         // Hue Isolation — full-width card, opens camera straight into the mode
                         Button { showingCameraHueIsolation = true } label: {
