@@ -13,10 +13,11 @@ struct SettingsView: View {
     // CVD profile — read/written via CVDProfile.load() / profile.save()
     @State private var selectedProfile: CVDProfile = CVDProfile.load()
 
-    @AppStorage("hapticsEnabled")        private var hapticsEnabled        = true
-    @AppStorage("voiceFeedbackEnabled")  private var voiceFeedbackEnabled  = true
-    @AppStorage("regionSamplingEnabled") private var regionSamplingEnabled = true
-    @AppStorage("hasSeenCameraTooltip")  private var hasSeenCameraTooltip  = false
+    @AppStorage("hapticsEnabled")            private var hapticsEnabled            = true
+    @AppStorage("voiceFeedbackEnabled")      private var voiceFeedbackEnabled      = true
+    @AppStorage("regionSamplingEnabled")     private var regionSamplingEnabled     = true
+    @AppStorage("hasSeenCameraTooltip")      private var hasSeenCameraTooltip      = false
+    @AppStorage("confusionWarningsEnabled")  private var confusionWarningsEnabled  = true
 
     var body: some View {
         NavigationStack {
@@ -30,9 +31,10 @@ struct SettingsView: View {
                         LabeledContent("Color Profile", value: selectedProfile.shortSettingsName)
                     }
 
-                    Toggle("Vibration",      isOn: $hapticsEnabled)
-                    Toggle("Voice Feedback", isOn: $voiceFeedbackEnabled)
-                    Toggle("Sample Region",  isOn: $regionSamplingEnabled)
+                    Toggle("Vibration",           isOn: $hapticsEnabled)
+                    Toggle("Voice Feedback",      isOn: $voiceFeedbackEnabled)
+                    Toggle("Sample Region",       isOn: $regionSamplingEnabled)
+                    Toggle("Confusion Warnings",  isOn: $confusionWarningsEnabled)
 
                     Button("Replay Feature Tour") {
                         if let onReplayTour {

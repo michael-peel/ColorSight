@@ -106,6 +106,7 @@ private struct SwatchRow: View {
     // whenever the profile changes in Settings.
     @AppStorage("cvdProfile") private var cvdProfileRaw = CVDProfile.defaultProfile.rawValue
     private var activeCVDProfile: CVDProfile { CVDProfile(rawValue: cvdProfileRaw) ?? .normal }
+    @AppStorage("confusionWarningsEnabled") private var confusionWarningsEnabled = true
 
     private var contextNote: String? {
         CVDColorContext.contextNote(for: swatch.simpleName, hex: swatch.hex, r: swatch.r, g: swatch.g, b: swatch.b, profile: activeCVDProfile)
@@ -114,7 +115,8 @@ private struct SwatchRow: View {
     // History entries are static, so — unlike the camera — the warning is always
     // shown for a known high-risk color, regardless of any "frozen" state.
     private var confusionWarning: String? {
-        CVDColorContext.confusionWarning(for: swatch.simpleName, r: swatch.r, g: swatch.g, b: swatch.b, profile: activeCVDProfile)
+        guard confusionWarningsEnabled else { return nil }
+        return CVDColorContext.confusionWarning(for: swatch.simpleName, r: swatch.r, g: swatch.g, b: swatch.b, profile: activeCVDProfile)
     }
 
     private var primaryText: String {

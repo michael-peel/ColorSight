@@ -14,6 +14,7 @@ struct CameraView: View {
     // whenever the profile changes in Settings.
     @AppStorage("cvdProfile") private var cvdProfileRaw = CVDProfile.defaultProfile.rawValue
     private var activeCVDProfile: CVDProfile { CVDProfile(rawValue: cvdProfileRaw) ?? .normal }
+    @AppStorage("confusionWarningsEnabled") private var confusionWarningsEnabled = true
 
     @State private var showingSettings   = false
     @State private var showingEyedropper = false
@@ -431,7 +432,7 @@ struct CameraView: View {
             let profile = activeCVDProfile
             // Confusion warnings are only useful once the color holds still — see
             // the class-level note on why this is gated to the frozen state.
-            let warning = viewModel.isFrozen
+            let warning = (viewModel.isFrozen && confusionWarningsEnabled)
                 ? CVDColorContext.confusionWarning(for: color.simpleName, r: color.rgb.r, g: color.rgb.g, b: color.rgb.b, profile: profile)
                 : nil
             let note = CVDColorContext.contextNote(for: color.simpleName, hex: color.hex, r: color.rgb.r, g: color.rgb.g, b: color.rgb.b, profile: profile)
@@ -453,7 +454,7 @@ struct CameraView: View {
                     )
 
                 // Text info
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(primaryText)
                         .font(.title2.bold())
                         .foregroundStyle(.primary)
@@ -490,7 +491,7 @@ struct CameraView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 14)
+                .padding(.vertical, 10)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 // Share button — visible only when frozen
@@ -514,7 +515,7 @@ struct CameraView: View {
                     .transition(.scale.combined(with: .opacity))
                 }
             }
-            .frame(minHeight: 100)
+            .frame(minHeight: 88, maxHeight: 180)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
             .overlay(
                 RoundedRectangle(cornerRadius: 16)

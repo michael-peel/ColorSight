@@ -11,12 +11,15 @@ struct ConfusionWarningBadge: View {
             Text(text)
         }
         .font(.caption2.bold())
-        .foregroundStyle(Color.orange)
+        // A light orange tint with orange text reads fine on a plain background, but
+        // washes out against the live camera feed showing through the card's
+        // ultraThinMaterial. Solid fill + dark text keeps it legible over any backdrop.
+        .foregroundStyle(Color(red: 0.35, green: 0.16, blue: 0))
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Color.orange.opacity(0.15), in: Capsule())
+        .background(Color.orange.opacity(0.9), in: Capsule())
         .overlay(
-            Capsule().strokeBorder(Color.orange.opacity(0.4), lineWidth: 1)
+            Capsule().strokeBorder(Color.orange, lineWidth: 1)
         )
         .fixedSize(horizontal: true, vertical: true)
     }

@@ -220,7 +220,7 @@ struct EyedropperView: View {
                     )
 
                 // Text info
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(color.simpleName)
                         .font(.title2.bold())
                         .foregroundStyle(.primary)
@@ -252,10 +252,10 @@ struct EyedropperView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 14)
+                .padding(.vertical, 10)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(minHeight: 100)
+            .frame(minHeight: 88, maxHeight: 180)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
             .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
             .animation(.easeInOut(duration: 0.15), value: color.hex)
