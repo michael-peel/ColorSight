@@ -8,6 +8,10 @@ struct CameraView: View {
     @Environment(\.dismiss)      private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    // Scales the standard color card's height cap with Dynamic Type (same ratio the
+    // system uses for .body text), so larger-but-not-yet-accessibility text sizes get
+    // enough room to avoid truncating the CVD note/warning instead of clipping them.
+    @ScaledMetric(relativeTo: .body) private var standardCardMaxHeight: CGFloat = 180
 
     @State private var viewModel         = CameraViewModel()
     @AppStorage("regionSamplingEnabled") private var regionSamplingEnabled = true
@@ -544,7 +548,7 @@ struct CameraView: View {
                 .transition(.scale.combined(with: .opacity))
             }
         }
-        .frame(minHeight: 88, maxHeight: 180)
+        .frame(minHeight: 88, maxHeight: standardCardMaxHeight)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)

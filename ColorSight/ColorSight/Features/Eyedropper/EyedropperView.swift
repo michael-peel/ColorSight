@@ -9,6 +9,9 @@ struct EyedropperView: View {
     @Environment(\.dismiss)      private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    // See CameraView — scales the standard card's height cap with Dynamic Type so
+    // larger-but-not-yet-accessibility text sizes don't truncate the CVD note.
+    @ScaledMetric(relativeTo: .body) private var standardCardMaxHeight: CGFloat = 180
 
     @State private var viewModel     = EyedropperViewModel()
     @State private var pickerItem:   PhotosPickerItem?
@@ -280,7 +283,7 @@ struct EyedropperView: View {
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(minHeight: 88, maxHeight: 180)
+        .frame(minHeight: 88, maxHeight: standardCardMaxHeight)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
         .animation(.easeInOut(duration: 0.15), value: color.hex)
