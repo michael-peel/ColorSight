@@ -10,6 +10,10 @@ struct CameraView: View {
 
     @State private var viewModel         = CameraViewModel()
     @AppStorage("regionSamplingEnabled") private var regionSamplingEnabled = true
+    // Same UserDefaults key CVDProfile.save()/load() use, so this stays in sync
+    // whenever the profile changes in Settings.
+    @AppStorage("cvdProfile") private var cvdProfileRaw = CVDProfile.defaultProfile.rawValue
+    private var activeCVDProfile: CVDProfile { CVDProfile(rawValue: cvdProfileRaw) ?? .normal }
 
     @State private var showingSettings   = false
     @State private var showingEyedropper = false
@@ -424,6 +428,17 @@ struct CameraView: View {
     @ViewBuilder
     private var colorInfoCard: some View {
         if let color = viewModel.identifiedColor {
+            let profile = activeCVDProfile
+            // Confusion warnings are only useful once the color holds still — see
+            // the class-level note on why this is gated to the frozen state.
+            let warning = viewModel.isFrozen
+                ? CVDColorContext.confusionWarning(for: color.simpleName, r: color.rgb.r, g: color.rgb.g, b: color.rgb.b, profile: profile)
+                : nil
+            let note = CVDColorContext.contextNote(for: color.simpleName, hex: color.hex, r: color.rgb.r, g: color.rgb.g, b: color.rgb.b, profile: profile)
+            let primaryText = profile == .achromatopsia
+                ? "\(CVDColorContext.brightnessLabel(r: color.rgb.r, g: color.rgb.g, b: color.rgb.b)) — \(color.simpleName)"
+                : color.simpleName
+
             HStack(spacing: 0) {
                 // Swatch
                 color.swiftUIColor
@@ -439,11 +454,11 @@ struct CameraView: View {
 
                 // Text info
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(color.simpleName)
+                    Text(primaryText)
                         .font(.title2.bold())
                         .foregroundStyle(.primary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        .minimumScaleFactor(0.6)
 
                     if color.name != color.simpleName {
                         Text(color.name)
@@ -461,6 +476,17 @@ struct CameraView: View {
                         Text(color.rgbDisplayString)
                             .font(.system(.caption2, design: .monospaced))
                             .foregroundStyle(.tertiary)
+                    }
+
+                    if let note {
+                        Text(note)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+
+                    if let warning {
+                        ConfusionWarningBadge(text: warning)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -488,7 +514,7 @@ struct CameraView: View {
                     .transition(.scale.combined(with: .opacity))
                 }
             }
-            .frame(height: 100)
+            .frame(minHeight: 100)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
             .overlay(
                 RoundedRectangle(cornerRadius: 16)

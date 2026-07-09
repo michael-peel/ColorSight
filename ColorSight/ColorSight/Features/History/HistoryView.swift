@@ -102,6 +102,27 @@ private struct SwatchRow: View {
     @State private var copied       = false
     @State private var sharePayload: SharePayload?
 
+    // Same UserDefaults key CVDProfile.save()/load() use, so this stays in sync
+    // whenever the profile changes in Settings.
+    @AppStorage("cvdProfile") private var cvdProfileRaw = CVDProfile.defaultProfile.rawValue
+    private var activeCVDProfile: CVDProfile { CVDProfile(rawValue: cvdProfileRaw) ?? .normal }
+
+    private var contextNote: String? {
+        CVDColorContext.contextNote(for: swatch.simpleName, hex: swatch.hex, r: swatch.r, g: swatch.g, b: swatch.b, profile: activeCVDProfile)
+    }
+
+    // History entries are static, so — unlike the camera — the warning is always
+    // shown for a known high-risk color, regardless of any "frozen" state.
+    private var confusionWarning: String? {
+        CVDColorContext.confusionWarning(for: swatch.simpleName, r: swatch.r, g: swatch.g, b: swatch.b, profile: activeCVDProfile)
+    }
+
+    private var primaryText: String {
+        activeCVDProfile == .achromatopsia
+            ? "\(CVDColorContext.brightnessLabel(r: swatch.r, g: swatch.g, b: swatch.b)) — \(swatch.simpleName)"
+            : swatch.simpleName
+    }
+
     var body: some View {
         HStack(spacing: 14) {
 
@@ -113,7 +134,7 @@ private struct SwatchRow: View {
 
             // Name + hex + timestamp
             VStack(alignment: .leading, spacing: 3) {
-                Text(swatch.simpleName)
+                Text(primaryText)
                     .font(.headline)
                     .lineLimit(1)
 
@@ -135,6 +156,17 @@ private struct SwatchRow: View {
                     Text(swatch.timestamp, style: .relative)
                         .font(.caption)
                         .foregroundStyle(.tertiary)
+                }
+
+                if let contextNote {
+                    Text(contextNote)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                if let confusionWarning {
+                    ConfusionWarningBadge(text: confusionWarning)
                 }
             }
 

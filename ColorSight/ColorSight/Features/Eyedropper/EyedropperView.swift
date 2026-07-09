@@ -13,6 +13,11 @@ struct EyedropperView: View {
     @State private var pickerItem:   PhotosPickerItem?
     @State private var isDragging    = false
 
+    // Same UserDefaults key CVDProfile.save()/load() use, so this stays in sync
+    // whenever the profile changes in Settings.
+    @AppStorage("cvdProfile") private var cvdProfileRaw = CVDProfile.defaultProfile.rawValue
+    private var activeCVDProfile: CVDProfile { CVDProfile(rawValue: cvdProfileRaw) ?? .normal }
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -199,6 +204,8 @@ struct EyedropperView: View {
     @ViewBuilder
     private var colorInfoCard: some View {
         if let color = viewModel.identifiedColor {
+            let note = CVDColorContext.contextNote(for: color.simpleName, hex: color.hex, r: color.rgb.r, g: color.rgb.g, b: color.rgb.b, profile: activeCVDProfile)
+
             HStack(spacing: 0) {
                 // Swatch
                 color.swiftUIColor
@@ -236,12 +243,19 @@ struct EyedropperView: View {
                             .font(.system(.caption2, design: .monospaced))
                             .foregroundStyle(.tertiary)
                     }
+
+                    if let note {
+                        Text(note)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(height: 100)
+            .frame(minHeight: 100)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
             .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
             .animation(.easeInOut(duration: 0.15), value: color.hex)
