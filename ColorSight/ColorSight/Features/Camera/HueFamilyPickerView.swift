@@ -21,6 +21,12 @@ struct HueFamilyPickerView: View {
     @State private var showingCustomPicker = false
     @State private var lastFamily: HueFamily = .red
 
+    // First-few-times hint explaining what the sensitivity slider does — same
+    // rate-limited, auto-hiding pattern as CameraView's Hue Isolation instructional
+    // banner (hueIsolationActivationCount / showingIsolationBanner).
+    @AppStorage("customToleranceHintCount") private var customToleranceHintCount = 0
+    @State private var showingToleranceHint = false
+
     private var hasSavedCustomColor: Bool { customR >= 0 }
     private var isCustomSelected: Bool {
         if case .custom = isolationTarget { return true }
@@ -31,6 +37,8 @@ struct HueFamilyPickerView: View {
         VStack(spacing: 6) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
+                    customPill
+
                     ForEach(HueFamily.allCases.filter { $0 != .white && $0 != .gray && $0 != .black }) { family in
                         HueFamilyPill(
                             swatchColor: family.swatchColor,
@@ -44,8 +52,6 @@ struct HueFamilyPickerView: View {
                             }
                         }
                     }
-
-                    customPill
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
@@ -92,33 +98,56 @@ struct HueFamilyPickerView: View {
 
     @ViewBuilder
     private func customControls(r: Int, g: Int, b: Int, tolerance: Double) -> some View {
-        HStack(spacing: 10) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    isolationTarget = .family(lastFamily)
-                }
-            } label: {
-                Image(systemName: "arrow.uturn.backward.circle.fill")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.85))
+        VStack(spacing: 6) {
+            if showingToleranceHint {
+                Text("Drag left for an exact match, right to catch similar shades too")
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: 280)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .accessibilityLabel("Back to hue families")
 
-            Slider(
-                value: Binding(
-                    get: { tolerance },
-                    set: { newValue in
-                        customTolerance = newValue
-                        isolationTarget = .custom(r: r, g: g, b: b, tolerance: newValue)
+            HStack(spacing: 10) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        isolationTarget = .family(lastFamily)
                     }
-                ),
-                in: 5...40
-            )
-            .tint(Color(red: Double(r) / 255.0, green: Double(g) / 255.0, blue: Double(b) / 255.0))
-            .accessibilityLabel("Match sensitivity")
-            .accessibilityValue("\(Int(tolerance))")
+                } label: {
+                    Image(systemName: "arrow.uturn.backward.circle.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+                .accessibilityLabel("Back to hue families")
+
+                Slider(
+                    value: Binding(
+                        get: { tolerance },
+                        set: { newValue in
+                            customTolerance = newValue
+                            isolationTarget = .custom(r: r, g: g, b: b, tolerance: newValue)
+                        }
+                    ),
+                    in: 5...40
+                )
+                .tint(Color(red: Double(r) / 255.0, green: Double(g) / 255.0, blue: Double(b) / 255.0))
+                .accessibilityLabel("Match sensitivity")
+                .accessibilityValue("\(Int(tolerance))")
+            }
+            .padding(.horizontal, 16)
         }
-        .padding(.horizontal, 16)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingToleranceHint)
+        .onAppear {
+            guard customToleranceHintCount < 5 else { return }
+            customToleranceHintCount += 1
+            showingToleranceHint = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                showingToleranceHint = false
+            }
+        }
     }
 }
 
