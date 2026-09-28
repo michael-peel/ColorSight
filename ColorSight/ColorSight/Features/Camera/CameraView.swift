@@ -125,7 +125,7 @@ struct CameraView: View {
                             .allowsHitTesting(false)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
-                    HueFamilyPickerView(selectedFamily: Bindable(viewModel).selectedHueFamily)
+                    HueFamilyPickerView(isolationTarget: Bindable(viewModel).isolationTarget)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
                 if isCalibratingWhiteBalance {
@@ -210,7 +210,7 @@ struct CameraView: View {
                                 .font(.title3)
                                 .foregroundStyle(
                                     viewModel.isHueIsolationActive
-                                        ? viewModel.selectedHueFamily.swatchColor
+                                        ? viewModel.isolationTarget.swatchColor
                                         : Color.white
                                 )
                                 .padding(10)
@@ -218,7 +218,7 @@ struct CameraView: View {
                                 .overlay(
                                     Circle().strokeBorder(
                                         viewModel.isHueIsolationActive
-                                            ? viewModel.selectedHueFamily.swatchColor.opacity(0.85)
+                                            ? viewModel.isolationTarget.swatchColor.opacity(0.85)
                                             : Color.clear,
                                         lineWidth: 1.5
                                     )
@@ -230,9 +230,9 @@ struct CameraView: View {
                                 })
                         }
                         .accessibilityLabel("Hue Isolation Mode")
-                        .accessibilityValue(viewModel.isHueIsolationActive ? "On" : "Off")
+                        .accessibilityValue(viewModel.isHueIsolationActive ? viewModel.isolationTarget.displayName : "Off")
                         .animation(.easeInOut(duration: 0.2), value: viewModel.isHueIsolationActive)
-                        .animation(.easeInOut(duration: 0.2), value: viewModel.selectedHueFamily)
+                        .animation(.easeInOut(duration: 0.2), value: viewModel.isolationTarget)
                     }
                     .padding(.leading, 16)
 

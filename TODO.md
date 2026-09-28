@@ -22,21 +22,21 @@ Reason: white balance calibration (Feature 3) should exist before custom color i
 - [x] Update Services/CVDColorContext.swift output strings if they reference the old naming — already used clinical terms, no change needed
 - [x] Test that VoiceOver reads the new names correctly — confirmed on device
 
-## Feature 2: Custom color isolation in Hue Isolation Mode (v2.1)
+## Feature 2: Custom color isolation in Hue Isolation Mode (v2.1) — implemented, pending on-device perf check
 
-- [ ] Entry point: add a "Custom" option alongside the 11 hue family buttons that opens a picker of saved colors from History
-- [ ] Build a lightweight picker sheet reusing the existing History SwiftData query
-- [ ] Extend HueFamily, or add a sibling IsolationTarget type, to represent either a built-in hue family or a custom color target, so downstream code has one path
-- [ ] Update the Swift CPU fallback matching to accept a custom target color plus tolerance
-- [ ] Update HueIsolation.metal to accept a custom target color and tolerance as a uniform, branching between "hue family bucket" and "custom color distance" modes
-- [ ] Use LAB distance for custom matching (consistent with the color ID matching elsewhere in the app)
-- [ ] Add a tolerance/sensitivity slider
-- [ ] Persist last-used custom color in UserDefaults
-- [ ] Update the camera toolbar palette icon to show which custom color is active and how to switch back to a standard hue family
-- [ ] Preserve mutual exclusivity with High Contrast Mode
-- [ ] Handle the empty state (zero saved colors in History)
-- [ ] Update VoiceOver announcements for custom mode
-- [ ] Test on device that the 30fps lock holds with the extra shader branch
+- [x] Entry point: add a "Custom" option alongside the 11 hue family buttons that opens a picker of saved colors from History — a "Custom" pill in the existing `HueFamilyPickerView` row
+- [x] Build a lightweight picker sheet reusing the existing History SwiftData query — `CustomColorPickerSheet.swift`, same `@Query(sort: \ColorSwatch.timestamp, order: .reverse)` as `HistoryView`
+- [x] Extend HueFamily, or add a sibling IsolationTarget type, to represent either a built-in hue family or a custom color target, so downstream code has one path — sibling type, `Models/IsolationTarget.swift` (HueFamily's `CaseIterable` conformance rules out an associated-value case)
+- [x] Update the Swift CPU fallback matching to accept a custom target color plus tolerance — `IsolationTarget.matches(r:g:b:)` is now the CPU fallback's sole classification authority (mirrors `HueFamily.matches()`'s role)
+- [x] Update HueIsolation.metal to accept a custom target color and tolerance as a uniform, branching between "hue family bucket" and "custom color distance" modes
+- [x] Use LAB distance for custom matching (consistent with the color ID matching elsewhere in the app) — extracted `ColorEngine`'s private LAB math into shared `Services/ColorMath.swift`, used by both
+- [x] Add a tolerance/sensitivity slider — 5...40 ΔE, shown under the pill row while a custom color is active
+- [x] Persist last-used custom color in UserDefaults — `customIsolationR/G/B/Tolerance`; Hue Isolation itself still starts on a family each session, this only remembers the custom color for quick re-selection
+- [x] Update the camera toolbar palette icon to show which custom color is active and how to switch back to a standard hue family — icon tint/VoiceOver value now reads `IsolationTarget.swatchColor`/`.displayName`; "Families" button in the custom row returns to the last-selected family
+- [x] Preserve mutual exclusivity with High Contrast Mode — untouched, that logic doesn't depend on what Hue Isolation isolates
+- [x] Handle the empty state (zero saved colors in History) — same empty-state copy/layout as `HistoryView`
+- [x] Update VoiceOver announcements for custom mode — pill accessibility labels, palette button's accessibilityValue, sensitivity slider label
+- [ ] Test on device that the 30fps lock holds with the extra shader branch — not yet checked; watch the `[HueIsolation] X ms/frame` console print while Custom mode is active
 
 ## Feature 3: White balance lock / calibration (v2.1) — DONE
 

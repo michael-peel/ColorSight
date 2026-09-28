@@ -11,13 +11,7 @@ final class ColorEngine: Sendable {
         let r: Int
         let g: Int
         let b: Int
-        let lab: LAB          // pre-computed for nearest-neighbor search
-    }
-
-    private struct LAB: Sendable {
-        let l: Double
-        let a: Double
-        let b: Double
+        let lab: ColorMath.LAB   // pre-computed for nearest-neighbor search
     }
 
     // MARK: - State
@@ -35,7 +29,7 @@ final class ColorEngine: Sendable {
     // ~75 entries covering the full color space with names anyone would recognise.
     // A second LAB nearest-neighbor search against this DB produces `simpleName`.
 
-    private static let simpleDB: [(name: String, lab: LAB)] = {
+    private static let simpleDB: [(name: String, lab: ColorMath.LAB)] = {
         let entries: [(String, Int, Int, Int)] = [
             // Achromatic
             ("Black",            0,   0,   0),
@@ -135,7 +129,7 @@ final class ColorEngine: Sendable {
             ("Khaki",            195, 180, 130),
         ]
         return entries.map { name, r, g, b in
-            (name: name, lab: rgbToLAB(r: r, g: g, b: b))
+            (name: name, lab: ColorMath.rgbToLAB(r: r, g: g, b: b))
         }
     }()
 
@@ -144,7 +138,7 @@ final class ColorEngine: Sendable {
     /// Identifies the closest named color for the given 8-bit RGB values.
     /// Safe to call from any thread.
     func identify(r: UInt8, g: UInt8, b: UInt8, profile: CVDProfile = .load()) -> IdentifiedColor {
-        let queryLAB   = Self.rgbToLAB(r: Int(r), g: Int(g), b: Int(b))
+        let queryLAB   = ColorMath.rgbToLAB(r: Int(r), g: Int(g), b: Int(b))
         let nearest    = nearestEntry(to: queryLAB)
         let simpleName = Self.nearestSimpleName(to: queryLAB)
 
@@ -165,80 +159,32 @@ final class ColorEngine: Sendable {
 
     // MARK: - Simple name lookup
 
-    private static func nearestSimpleName(to query: LAB) -> String {
+    private static func nearestSimpleName(to query: ColorMath.LAB) -> String {
         var bestName = simpleDB[0].name
-        var bestDist = squaredDeltaE(query, simpleDB[0].lab)
+        var bestDist = ColorMath.squaredDeltaE(query, simpleDB[0].lab)
         for entry in simpleDB.dropFirst() {
-            let d = squaredDeltaE(query, entry.lab)
+            let d = ColorMath.squaredDeltaE(query, entry.lab)
             if d < bestDist { bestDist = d; bestName = entry.name }
         }
         return bestName
     }
 
-    private static func squaredDeltaE(_ a: LAB, _ b: LAB) -> Double {
-        let dl = a.l - b.l; let da = a.a - b.a; let db = a.b - b.b
-        return dl*dl + da*da + db*db
-    }
-
     // MARK: - Nearest-neighbor search
 
-    private func nearestEntry(to query: LAB) -> ColorEntry? {
+    private func nearestEntry(to query: ColorMath.LAB) -> ColorEntry? {
         // Linear scan — ~200 entries takes < 0.05ms. No spatial index needed for v1.
         guard let first = database.first else { return nil }
         var bestEntry = first
-        var bestDist  = deltaE(query, first.lab)
+        var bestDist  = ColorMath.squaredDeltaE(query, first.lab)
 
         for entry in database.dropFirst() {
-            let d = deltaE(query, entry.lab)
+            let d = ColorMath.squaredDeltaE(query, entry.lab)
             if d < bestDist {
                 bestDist  = d
                 bestEntry = entry
             }
         }
         return bestEntry
-    }
-
-    /// Euclidean distance in LAB (a simplified ΔE).
-    /// Good enough for nearest-neighbor; full CIE2000 isn't needed here.
-    private func deltaE(_ a: LAB, _ b: LAB) -> Double {
-        let dl = a.l - b.l
-        let da = a.a - b.a
-        let db = a.b - b.b
-        return dl*dl + da*da + db*db   // skip sqrt — we only compare, never display the value
-    }
-
-    // MARK: - RGB → LAB
-
-    private static func rgbToLAB(r: Int, g: Int, b: Int) -> LAB {
-        // Step 1: normalize to 0–1
-        var rr = Double(r) / 255.0
-        var gg = Double(g) / 255.0
-        var bb = Double(b) / 255.0
-
-        // Step 2: sRGB gamma → linear
-        rr = rr > 0.04045 ? pow((rr + 0.055) / 1.055, 2.4) : rr / 12.92
-        gg = gg > 0.04045 ? pow((gg + 0.055) / 1.055, 2.4) : gg / 12.92
-        bb = bb > 0.04045 ? pow((bb + 0.055) / 1.055, 2.4) : bb / 12.92
-
-        // Step 3: linear RGB → XYZ (sRGB / D65)
-        let x = (rr * 0.4124564 + gg * 0.3575761 + bb * 0.1804375) / 0.95047
-        let y = (rr * 0.2126729 + gg * 0.7151522 + bb * 0.0721750) / 1.00000
-        let z = (rr * 0.0193339 + gg * 0.1191920 + bb * 0.9503041) / 1.08883
-
-        // Step 4: XYZ → LAB
-        func f(_ t: Double) -> Double {
-            t > 0.008856 ? pow(t, 1.0/3.0) : (7.787 * t + 16.0/116.0)
-        }
-
-        let fx = f(x)
-        let fy = f(y)
-        let fz = f(z)
-
-        return LAB(
-            l: max(0, 116.0 * fy - 16.0),
-            a: 500.0 * (fx - fy),
-            b: 200.0 * (fy - fz)
-        )
     }
 
     // MARK: - RGB → HSL
@@ -454,7 +400,7 @@ final class ColorEngine: Sendable {
                 r: entry.r,
                 g: entry.g,
                 b: entry.b,
-                lab: rgbToLAB(r: entry.r, g: entry.g, b: entry.b)
+                lab: ColorMath.rgbToLAB(r: entry.r, g: entry.g, b: entry.b)
             )
         }
     }

@@ -3,8 +3,13 @@ using namespace metal;
 
 // Must match HueIsolationParams in HueIsolationService.swift.
 struct HueIsolationParams {
-    uint family;   // HueFamily.metalIndex: red=0 orange=1 yellow=2 green=3 blue=4
-                   //                       purple=5 pink=6 brown=7 white=8 gray=9 black=10
+    uint mode;     // 0 = hue family, 1 = custom color (LAB distance)
+    uint family;   // valid when mode == 0. HueFamily.metalIndex: red=0 orange=1 yellow=2
+                   // green=3 blue=4 purple=5 pink=6 brown=7 white=8 gray=9 black=10
+    float targetL; // valid when mode == 1 — custom target color in LAB
+    float targetA;
+    float targetB;
+    float toleranceSquared;   // squared ΔE — compared without sqrt, same as matchesFamily's thresholds
 };
 
 // Converts an RGB triple (values in [0,1]) to HSB.
@@ -30,6 +35,25 @@ static float3 rgbToHSB(float r, float g, float b) {
     }
 
     return float3(hue, saturation, brightness);
+}
+
+// Converts an RGB triple (values in [0,1]) to CIE LAB (D65 white point).
+// Mirrors ColorMath.rgbToLAB in ColorMath.swift exactly — used for the custom
+// color isolation target, mode == 1 in HueIsolationParams.
+static float3 rgbToLAB(float r, float g, float b) {
+    r = (r > 0.04045f) ? pow((r + 0.055f) / 1.055f, 2.4f) : r / 12.92f;
+    g = (g > 0.04045f) ? pow((g + 0.055f) / 1.055f, 2.4f) : g / 12.92f;
+    b = (b > 0.04045f) ? pow((b + 0.055f) / 1.055f, 2.4f) : b / 12.92f;
+
+    float x = (r * 0.4124564f + g * 0.3575761f + b * 0.1804375f) / 0.95047f;
+    float y = (r * 0.2126729f + g * 0.7151522f + b * 0.0721750f) / 1.00000f;
+    float z = (r * 0.0193339f + g * 0.1191920f + b * 0.9503041f) / 1.08883f;
+
+    float fx = (x > 0.008856f) ? pow(x, 1.0f/3.0f) : (7.787f * x + 16.0f/116.0f);
+    float fy = (y > 0.008856f) ? pow(y, 1.0f/3.0f) : (7.787f * y + 16.0f/116.0f);
+    float fz = (z > 0.008856f) ? pow(z, 1.0f/3.0f) : (7.787f * z + 16.0f/116.0f);
+
+    return float3(max(0.0f, 116.0f * fy - 16.0f), 500.0f * (fx - fy), 200.0f * (fy - fz));
 }
 
 // Returns true if the pixel (hue°, sat, bri) belongs to the given family index.
@@ -92,10 +116,20 @@ kernel void hueIsolate(
     float4 px = inTex.read(gid);   // float4(r, g, b, a) in [0,1]
     float r = px.r, g = px.g, b = px.b;
 
-    float3 hsb = rgbToHSB(r, g, b);
+    bool matches;
+    if (params.mode == 1u) {
+        float3 lab = rgbToLAB(r, g, b);
+        float dl = lab.x - params.targetL;
+        float da = lab.y - params.targetA;
+        float db = lab.z - params.targetB;
+        matches = (dl*dl + da*da + db*db) <= params.toleranceSquared;
+    } else {
+        float3 hsb = rgbToHSB(r, g, b);
+        matches = matchesFamily(hsb.x, hsb.y, hsb.z, params.family);
+    }
 
     float4 out;
-    if (matchesFamily(hsb.x, hsb.y, hsb.z, params.family)) {
+    if (matches) {
         out = px;                                          // keep original colour
     } else {
         float luma = 0.299f * r + 0.587f * g + 0.114f * b;  // ITU-R BT.601

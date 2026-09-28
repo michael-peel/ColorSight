@@ -15,7 +15,7 @@ enum HueFamily: String, CaseIterable, Identifiable {
 
     /// Integer index passed to the Metal compute kernel's HueIsolationParams.family field.
     /// Must match the `case` ordering in the Metal shader's matchesFamily() switch.
-    var metalIndex: Int { HueFamily.allCases.firstIndex(of: self)! }
+    nonisolated var metalIndex: Int { HueFamily.allCases.firstIndex(of: self)! }
 
     /// Reference swatch shown in the pill selector.
     /// Chosen for maximum saturation/brightness to aid legibility across CVD types;

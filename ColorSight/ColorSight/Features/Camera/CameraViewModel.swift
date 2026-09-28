@@ -16,7 +16,7 @@ private final class CameraThreadState: @unchecked Sendable {
 
     // Hue isolation — written on MainActor, read on sampleQueue
     nonisolated(unsafe) var isHueIsolationActive = false
-    nonisolated(unsafe) var selectedHueFamily    = HueFamily.red
+    nonisolated(unsafe) var isolationTarget      = IsolationTarget.family(.red)
     // High contrast — written on MainActor, read on sampleQueue. Mutually exclusive
     // with hue isolation; both share the display layer/output buffer below since only
     // one display filter is ever active at a time.
@@ -91,8 +91,8 @@ final class CameraViewModel: NSObject {
             }
         }
     }
-    var selectedHueFamily: HueFamily = .red {
-        didSet { threadState.selectedHueFamily = selectedHueFamily }
+    var isolationTarget: IsolationTarget = .family(.red) {
+        didSet { threadState.isolationTarget = isolationTarget }
     }
 
     /// Boosts on-screen brightness/contrast for visibility in low light — hue and
@@ -449,7 +449,7 @@ extension CameraViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
                 let t0 = CACurrentMediaTime()
                 let wrote = threadState.hueIsolationService.process(
                     input:  pixelBuffer,
-                    family: threadState.selectedHueFamily,
+                    target: threadState.isolationTarget,
                     output: outBuffer
                 )
                 let ms = (CACurrentMediaTime() - t0) * 1000

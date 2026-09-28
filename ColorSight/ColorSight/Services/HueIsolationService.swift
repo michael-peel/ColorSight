@@ -19,10 +19,11 @@ final class HueIsolationService: @unchecked Sendable {
 
     // MARK: - Metal objects (nil → CPU fallback active)
 
-    private let metalDevice:   MTLDevice?
-    private let commandQueue:  MTLCommandQueue?
-    private let pipelineState: MTLComputePipelineState?
-    private let textureCache:  CVMetalTextureCache?
+    nonisolated private let metalDevice:   MTLDevice?
+    nonisolated private let commandQueue:  MTLCommandQueue?
+    nonisolated private let pipelineState: MTLComputePipelineState?
+    // CVMetalTextureCache is a Core Foundation type, not Sendable — unsafe opt-out needed.
+    nonisolated(unsafe) private let textureCache: CVMetalTextureCache?
 
     // MARK: - Init
 
@@ -74,21 +75,21 @@ final class HueIsolationService: @unchecked Sendable {
     /// Applies hue isolation to `input` and writes the result into `output`.
     /// Returns true if output was written successfully (GPU or CPU path).
     /// The caller wraps `output` in a CMSampleBuffer and enqueues it for display.
-    nonisolated func process(input: CVPixelBuffer, family: HueFamily,
+    nonisolated func process(input: CVPixelBuffer, target: IsolationTarget,
                              output: CVPixelBuffer) -> Bool {
         if let device = metalDevice, let cq = commandQueue,
            let ps = pipelineState, let tc = textureCache {
-            return processGPU(input: input, family: family, output: output,
+            return processGPU(input: input, target: target, output: output,
                               device: device, cq: cq, ps: ps, tc: tc)
         }
-        processCPU(input: input, family: family, output: output)
+        processCPU(input: input, target: target, output: output)
         return true
     }
 
     // MARK: - GPU path
 
     nonisolated private func processGPU(
-        input:  CVPixelBuffer, family: HueFamily, output: CVPixelBuffer,
+        input:  CVPixelBuffer, target: IsolationTarget, output: CVPixelBuffer,
         device: MTLDevice, cq: MTLCommandQueue,
         ps:     MTLComputePipelineState, tc: CVMetalTextureCache
     ) -> Bool {
@@ -119,7 +120,21 @@ final class HueIsolationService: @unchecked Sendable {
         encoder.setTexture(inTex,  index: 0)
         encoder.setTexture(outTex, index: 1)
 
-        var params = HueIsolationParams(family: UInt32(family.metalIndex))
+        var params: HueIsolationParams
+        switch target {
+        case .family(let family):
+            params = HueIsolationParams(
+                mode: 0, family: UInt32(family.metalIndex),
+                targetL: 0, targetA: 0, targetB: 0, toleranceSquared: 0
+            )
+        case .custom(let r, let g, let b, let tolerance):
+            let lab = ColorMath.rgbToLAB(r: r, g: g, b: b)
+            params = HueIsolationParams(
+                mode: 1, family: 0,
+                targetL: Float(lab.l), targetA: Float(lab.a), targetB: Float(lab.b),
+                toleranceSquared: Float(tolerance * tolerance)
+            )
+        }
         encoder.setBytes(&params, length: MemoryLayout<HueIsolationParams>.size, index: 0)
 
         encoder.dispatchThreads(
@@ -141,7 +156,7 @@ final class HueIsolationService: @unchecked Sendable {
 
     // Writes processed pixels to `output` but returns no display artifact.
     // Called only on non-Metal hardware; all iOS 26 devices have Metal.
-    nonisolated private func processCPU(input: CVPixelBuffer, family: HueFamily,
+    nonisolated private func processCPU(input: CVPixelBuffer, target: IsolationTarget,
                                         output: CVPixelBuffer) {
         let width  = CVPixelBufferGetWidth(input)
         let height = CVPixelBufferGetHeight(input)
@@ -172,7 +187,7 @@ final class HueIsolationService: @unchecked Sendable {
                 let si = so + col * 4
                 let di = do_ + col * 4
                 let b = srcBuf[si]; let g = srcBuf[si+1]; let r = srcBuf[si+2]
-                if family.matches(r: r, g: g, b: b) {
+                if target.matches(r: Int(r), g: Int(g), b: Int(b)) {
                     dstBuf[di]=b; dstBuf[di+1]=g; dstBuf[di+2]=r; dstBuf[di+3]=255
                 } else {
                     let lumaRaw: UInt32 = 299*UInt32(r) + 587*UInt32(g) + 114*UInt32(b)
@@ -187,5 +202,10 @@ final class HueIsolationService: @unchecked Sendable {
 // MARK: - GPU constants (layout must match HueIsolationParams in HueIsolation.metal)
 
 private struct HueIsolationParams {
-    var family: UInt32
+    var mode:   UInt32   // 0 = family, 1 = custom
+    var family: UInt32   // valid when mode == 0
+    var targetL: Float   // valid when mode == 1 (LAB)
+    var targetA: Float
+    var targetB: Float
+    var toleranceSquared: Float
 }
