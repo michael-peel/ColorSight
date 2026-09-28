@@ -1,0 +1,30 @@
+ColorSight — resume point (computer restart pending)
+
+DONE
+- Feature 1 (clinical profile names) implemented and committed.
+  Commit 232e891: "Use clinical CVD profile names in the profile picker"
+  File: ColorSight/ColorSight/Features/Home/HomeView.swift
+  Change: onboardingTitle now returns Deuteranopia/Protanopia/Tritanopia/
+  Achromatopsia instead of layman-only phrasing ("Red-Green (Green-type)"
+  etc). Used by the profile-picker cards in both first-launch onboarding
+  and the home screen's "change profile" sheet. Settings and the home
+  screen profile row already used clinical names, so those were untouched.
+- Verified with `xcodebuild ... generic/platform=iOS build` — BUILD SUCCEEDED.
+
+BLOCKED / IN PROGRESS
+- Have not yet installed to a physical device for you to test.
+- New phone "Michael's 18 Pro Max" (iPhone19,3, id
+  AC9C66BD-56F2-558A-B209-CE01EF3103CF) — Developer Mode was disabled,
+  you just enabled it. Needs the restart to take effect.
+- Old device "Michael's Pro Max 15" shows as unavailable/disconnected.
+
+NEXT STEPS after restart
+1. Confirm new phone shows "available" via: xcrun devicectl list devices
+2. Build + install + launch Feature 1 build on the new phone (no simulator).
+3. You test Feature 1 on device.
+4. Once approved, move to Feature 3 (white balance lock/calibration) per
+   TODO.md's suggested order (Feature 1, then 3, then 2, then the rest).
+
+OPEN QUESTION (not yet resolved)
+- TODO.md is untracked in git (shows up in `git status`). Left as-is;
+  let me know if you want it committed.

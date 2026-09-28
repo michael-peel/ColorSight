@@ -18,6 +18,7 @@ struct SettingsView: View {
     @AppStorage("regionSamplingEnabled")     private var regionSamplingEnabled     = true
     @AppStorage("hasSeenCameraTooltip")      private var hasSeenCameraTooltip      = false
     @AppStorage("confusionWarningsEnabled")  private var confusionWarningsEnabled  = true
+    @AppStorage("whiteBalanceCalibrationEnabled") private var whiteBalanceCalibrationEnabled = true
 
     var body: some View {
         NavigationStack {
@@ -35,6 +36,7 @@ struct SettingsView: View {
                     Toggle("Voice Feedback",      isOn: $voiceFeedbackEnabled)
                     Toggle("Sample Region",       isOn: $regionSamplingEnabled)
                     Toggle("Confusion Warnings",  isOn: $confusionWarningsEnabled)
+                    Toggle("White Balance Calibration", isOn: $whiteBalanceCalibrationEnabled)
 
                     Button("Replay Feature Tour") {
                         if let onReplayTour {

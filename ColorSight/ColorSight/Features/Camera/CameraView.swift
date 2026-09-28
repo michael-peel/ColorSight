@@ -26,6 +26,7 @@ struct CameraView: View {
     @AppStorage("cvdProfile") private var cvdProfileRaw = CVDProfile.defaultProfile.rawValue
     private var activeCVDProfile: CVDProfile { CVDProfile(rawValue: cvdProfileRaw) ?? .normal }
     @AppStorage("confusionWarningsEnabled") private var confusionWarningsEnabled = true
+    @AppStorage("whiteBalanceCalibrationEnabled") private var whiteBalanceCalibrationEnabled = true
 
     @State private var showingSettings   = false
     @State private var showingEyedropper = false
@@ -45,6 +46,10 @@ struct CameraView: View {
     @State private var showingTooltip = false
     @State private var buttonFrames: [TooltipButtonID: CGRect] = [:]
     @State private var showingIsolationBanner = false
+
+    // White balance calibration
+    @State private var isCalibratingWhiteBalance = false
+    @State private var calibrationFeedback: String?
 
     // Safe-area insets read directly from UIKit so we can place UI elements
     // correctly after making the ZStack full-screen with .ignoresSafeArea().
@@ -123,12 +128,41 @@ struct CameraView: View {
                     HueFamilyPickerView(selectedFamily: Bindable(viewModel).selectedHueFamily)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
+                if isCalibratingWhiteBalance {
+                    Text("Point at something white or gray,\nthen tap the crosshair")
+                        .font(.subheadline)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: 300)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                        .allowsHitTesting(false)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
                 colorInfoCard
                     .padding(.horizontal, 16)
             }
             .padding(.bottom, 40 + safeInsets.bottom)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isHueIsolationActive)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingIsolationBanner)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isCalibratingWhiteBalance)
+
+            // MARK: - White balance calibration feedback (appears below the top bar)
+            if let calibrationFeedback {
+                VStack {
+                    Text(calibrationFeedback)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(.top, safeInsets.top + 70)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    Spacer()
+                }
+                .allowsHitTesting(false)
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: calibrationFeedback)
+            }
 
             // MARK: - Top bar (eyedropper left, settings + torch right)
             VStack {
@@ -278,6 +312,43 @@ struct CameraView: View {
                             .accessibilityLabel("High Contrast Mode")
                             .accessibilityValue(viewModel.isHighContrastActive ? "On" : "Off")
                             .animation(.easeInOut(duration: 0.2), value: viewModel.isHighContrastActive)
+
+                            if whiteBalanceCalibrationEnabled {
+                                Button {
+                                    if viewModel.isWhiteBalanceCalibrated {
+                                        viewModel.resetWhiteBalance()
+                                    } else {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            isCalibratingWhiteBalance.toggle()
+                                        }
+                                    }
+                                } label: {
+                                    Image(systemName: "thermometer.medium")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(width: topBarIconSize, height: topBarIconSize)
+                                        .foregroundStyle(
+                                            viewModel.isWhiteBalanceCalibrated ? Color.accentColor
+                                                : isCalibratingWhiteBalance    ? Color.yellow
+                                                : Color.white
+                                        )
+                                        .padding(10)
+                                        .background(.ultraThinMaterial, in: Circle())
+                                        .shadow(color: .black.opacity(0.3), radius: 4)
+                                        .background(GeometryReader { geo in
+                                            Color.clear.preference(key: ButtonFramesKey.self,
+                                                value: [.whiteBalance: geo.frame(in: .global)])
+                                        })
+                                }
+                                .accessibilityLabel("White Balance Calibration")
+                                .accessibilityValue(
+                                    viewModel.isWhiteBalanceCalibrated ? "Calibrated"
+                                        : isCalibratingWhiteBalance    ? "Aiming, tap a white or gray area"
+                                        : "Off"
+                                )
+                                .animation(.easeInOut(duration: 0.2), value: viewModel.isWhiteBalanceCalibrated)
+                                .animation(.easeInOut(duration: 0.2), value: isCalibratingWhiteBalance)
+                            }
                         }
                     }
                     .padding(.trailing, 16)
@@ -341,8 +412,18 @@ struct CameraView: View {
                     work.cancel()
                     pressWorkItem = nil
                     guard !isPinching else { return }
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                        viewModel.isFrozen.toggle()
+                    if isCalibratingWhiteBalance {
+                        // Tapping while aiming samples the crosshair color as the white/
+                        // gray reference. Stays in aiming mode on failure so the user can
+                        // retry immediately (see the whiteBalanceCalibrationFailed handler
+                        // below); exits aiming mode on success (isWhiteBalanceCalibrated).
+                        if let color = viewModel.identifiedColor {
+                            viewModel.calibrateWhiteBalance(using: color.rgb)
+                        }
+                    } else {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                            viewModel.isFrozen.toggle()
+                        }
                     }
                 },
             including: showingTooltip ? .none : .all
@@ -426,6 +507,17 @@ struct CameraView: View {
                 withAnimation { showingIsolationBanner = false }
             }
         }
+        .onChange(of: viewModel.isWhiteBalanceCalibrated) { _, calibrated in
+            guard calibrated else { return }
+            isCalibratingWhiteBalance = false
+            showCalibrationFeedback("White Balance Calibrated")
+            AccessibilityService.shared.announce("White balance calibrated")
+        }
+        .onChange(of: viewModel.whiteBalanceCalibrationFailed) { _, failed in
+            guard failed else { return }
+            viewModel.whiteBalanceCalibrationFailed = false   // momentary trigger, reset immediately
+            showCalibrationFeedback("Too Dark — Try a Lighter Spot")
+        }
     }
 
     // MARK: - Helpers
@@ -433,6 +525,16 @@ struct CameraView: View {
     private func dismissTooltip() {
         withAnimation(.easeOut(duration: 0.3)) { showingTooltip = false }
         hasSeenCameraTooltip = true
+    }
+
+    /// Shows a brief capsule under the top bar, then auto-hides it after 2 seconds.
+    private func showCalibrationFeedback(_ text: String) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            calibrationFeedback = text
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            withAnimation { calibrationFeedback = nil }
+        }
     }
 
     // MARK: - Color info card
@@ -700,7 +802,7 @@ private struct CrosshairView: View {
 // MARK: - Preference key for capturing toolbar button frames
 
 private enum TooltipButtonID: String {
-    case chevron, eyedropper, torch, palette, highContrast
+    case chevron, eyedropper, torch, palette, highContrast, whiteBalance
 }
 
 private struct ButtonFramesKey: PreferenceKey {
@@ -715,16 +817,23 @@ private struct ButtonFramesKey: PreferenceKey {
 private struct CameraTooltipOverlay: View {
     let buttonFrames: [TooltipButtonID: CGRect]
     let onDismiss:    () -> Void
+    var showsWhiteBalanceStep: Bool = true
 
     @State private var currentStep = 0
 
-    private let steps: [(id: TooltipButtonID, label: String)] = [
-        (.chevron,      "Go back to the home screen"),
-        (.eyedropper,   "Open a photo to sample colors"),
-        (.palette,      "Hue Isolation — highlight one color, gray out the rest"),
-        (.torch,        "Toggle the flashlight"),
-        (.highContrast, "High Contrast — boosts visibility in low light"),
-    ]
+    private var steps: [(id: TooltipButtonID, label: String)] {
+        var steps: [(id: TooltipButtonID, label: String)] = [
+            (.chevron,      "Go back to the home screen"),
+            (.eyedropper,   "Open a photo to sample colors"),
+            (.palette,      "Hue Isolation — highlight one color, gray out the rest"),
+            (.torch,        "Toggle the flashlight"),
+            (.highContrast, "High Contrast — boosts visibility in low light"),
+        ]
+        if showsWhiteBalanceStep {
+            steps.append((.whiteBalance, "White Balance — tap something white or gray to correct color casts"))
+        }
+        return steps
+    }
 
     private var isLastStep:   Bool            { currentStep == steps.count - 1 }
     private var currentID:    TooltipButtonID { steps[currentStep].id }

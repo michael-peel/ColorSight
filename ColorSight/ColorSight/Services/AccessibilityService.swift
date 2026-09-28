@@ -54,4 +54,12 @@ final class AccessibilityService {
             }
         }
     }
+
+    /// Posts a plain VoiceOver announcement, if VoiceOver is running. For state-change
+    /// confirmations (e.g. "White balance calibrated") that aren't tied to a specific
+    /// control's `accessibilityValue` and so wouldn't otherwise be spoken.
+    func announce(_ text: String) {
+        guard UIAccessibility.isVoiceOverRunning else { return }
+        UIAccessibility.post(notification: .announcement, argument: text)
+    }
 }

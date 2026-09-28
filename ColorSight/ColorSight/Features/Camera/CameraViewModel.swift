@@ -64,6 +64,16 @@ final class CameraViewModel: NSObject {
     var sessionIsRunning = false
     var errorMessage: String?
 
+    // MARK: - White balance calibration
+
+    /// True once the user has calibrated against a white/gray reference and the device
+    /// is locked to the corrected gains. Reset whenever the session stops (see
+    /// `stopSession()`), same as torch/zoom, so each camera session starts fresh.
+    var isWhiteBalanceCalibrated = false
+    /// Momentary trigger — set true when a calibration attempt fails (reference too
+    /// dark). CameraView observes this, shows feedback, then resets it to false.
+    var whiteBalanceCalibrationFailed = false
+
     // MARK: - Hue Isolation state
 
     var isHueIsolationActive = false {
@@ -137,15 +147,18 @@ final class CameraViewModel: NSObject {
         let threadState = self.threadState
         sessionQueue.async { [weak self] in
             guard let self, session.isRunning else { return }
-            // Turn off the torch and reset zoom before stopping the session, so the
-            // next time the camera opens it starts from a predictable, un-zoomed state.
+            // Turn off the torch, reset zoom, and clear any white balance calibration
+            // before stopping the session, so the next time the camera opens it starts
+            // from a predictable, un-zoomed, auto-white-balanced state.
             Self.setTorch(false, device: threadState.captureDevice)
             Self.setZoom(1.0, device: threadState.captureDevice)
+            Self.resetWhiteBalanceMode(device: threadState.captureDevice)
             session.stopRunning()
             DispatchQueue.main.async {
                 self.sessionIsRunning = false
                 self.isTorchOn = false
                 self.zoomFactor = 1.0
+                self.isWhiteBalanceCalibrated = false
             }
         }
     }
@@ -282,6 +295,94 @@ final class CameraViewModel: NSObject {
             } catch {
                 // Non-critical — silently ignore
             }
+        }
+    }
+
+    // MARK: - White balance calibration (MainActor entry points, run on sessionQueue)
+
+    /// Locks the camera's white balance using `measured` as a white/gray reference —
+    /// the user has just tapped a spot they identified as neutral. Reads the device's
+    /// current auto-WB gains, computes the correction (see `WhiteBalanceCalibration`),
+    /// and locks the device to the corrected gains.
+    ///
+    /// This corrects the raw `CVPixelBuffer` itself (in the ISP, before it ever reaches
+    /// `captureOutput`), so live color ID, Hue Isolation, and High Contrast all inherit
+    /// the correction automatically — no changes needed in `ColorEngine`,
+    /// `HueIsolationService`, or the Metal kernel.
+    func calibrateWhiteBalance(using measured: IdentifiedColor.RGBComponents) {
+        let threadState = self.threadState
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            let succeeded = Self.applyWhiteBalanceCalibration(
+                measuredR: Double(measured.r), measuredG: Double(measured.g), measuredB: Double(measured.b),
+                device: threadState.captureDevice
+            )
+            DispatchQueue.main.async {
+                if succeeded {
+                    self.isWhiteBalanceCalibrated = true
+                } else {
+                    self.whiteBalanceCalibrationFailed = true
+                }
+            }
+        }
+    }
+
+    /// Resets white balance to continuous auto — the one-tap "undo" for calibration.
+    func resetWhiteBalance() {
+        let threadState = self.threadState
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            Self.resetWhiteBalanceMode(device: threadState.captureDevice)
+            DispatchQueue.main.async { self.isWhiteBalanceCalibrated = false }
+        }
+    }
+
+    /// Reads the device's current auto-WB gains, computes the corrected gains for
+    /// `measured` via `WhiteBalanceCalibration`, and locks the device to them. Returns
+    /// false (no-op) if the device doesn't support locked white balance or the
+    /// reference sample is too dark to trust.
+    @discardableResult
+    nonisolated private static func applyWhiteBalanceCalibration(
+        measuredR: Double, measuredG: Double, measuredB: Double, device: AVCaptureDevice?
+    ) -> Bool {
+        guard let device, device.isWhiteBalanceModeSupported(.locked) else { return false }
+        let current = device.deviceWhiteBalanceGains
+        guard let corrected = WhiteBalanceCalibration.correctedGains(
+            measuredR: measuredR, measuredG: measuredG, measuredB: measuredB,
+            currentGains: .init(
+                red:   Double(current.redGain),
+                green: Double(current.greenGain),
+                blue:  Double(current.blueGain)
+            ),
+            maxGain: Double(device.maxWhiteBalanceGain)
+        ) else { return false }
+
+        do {
+            try device.lockForConfiguration()
+            device.setWhiteBalanceModeLocked(with: AVCaptureDevice.WhiteBalanceGains(
+                redGain:   Float(corrected.red),
+                greenGain: Float(corrected.green),
+                blueGain:  Float(corrected.blue)
+            ))
+            device.unlockForConfiguration()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Sets the white balance mode back to continuous auto. Returns true if the change
+    /// succeeded.
+    @discardableResult
+    nonisolated private static func resetWhiteBalanceMode(device: AVCaptureDevice?) -> Bool {
+        guard let device, device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) else { return false }
+        do {
+            try device.lockForConfiguration()
+            device.whiteBalanceMode = .continuousAutoWhiteBalance
+            device.unlockForConfiguration()
+            return true
+        } catch {
+            return false
         }
     }
 
