@@ -30,7 +30,7 @@ Supporting features: color history library, VoiceOver announcements, haptic feed
 | Device | Notes |
 |--------|-------|
 | MacBook Neo (2026), A18 Pro, 8GB RAM | Dedicated solely to this project |
-| iPhone 15 Pro Max | Personal + test device. Dev builds are safe on personal phones. |
+| iPhone 18 Pro Max (iOS 27) | Personal + test device, replaced the 15 Pro Max on 2026-09-28. Dev builds are safe on personal phones. |
 
 ---
 
@@ -191,6 +191,21 @@ Boosts on-screen brightness/contrast so the preview is usable in dim environment
 - `CameraThreadState.isHighContrastActive` / `isHueIsolationActive` — setting one to `true` flips the other to `false`; `isolationDisplayLayer` is only torn down (flushed + nilled) when *both* are off.
 - CPU fallback (`HighContrastService.processCPU`) exists for parity with Hue Isolation but never runs on iOS 26 devices.
 
+### White Balance Calibration
+
+Tap-a-reference calibration: the user taps something they know is white or gray, and the app locks the camera's white balance corrected against that reference. One combined control (not a separate "simple lock" — decided with Michael during planning, since the toolbar was already at 7 icons and an uncalibrated lock is a less useful result than a calibrated one).
+
+**Why this needed no pixel-processing code at all:** correction happens by locking `AVCaptureDevice`'s white balance to corrected gains (`setWhiteBalanceModeLocked(with:)`), not by transforming sampled RGB values in software. That corrects the raw `CVPixelBuffer` itself, in the ISP, before `captureOutput` ever sees it — so live color ID, Hue Isolation, and High Contrast all inherit the correction automatically. No changes to `ColorEngine`, `HueIsolationService`, `HighContrastService`, or any Metal kernel.
+
+**Key types:**
+| Type | Role |
+|------|------|
+| `WhiteBalanceCalibration` | Pure, stateless gain math (`Services/WhiteBalanceCalibration.swift`) — given a measured RGB reference and the device's current gains, returns corrected gains clamped to `[1, maxWhiteBalanceGain]`. Unit tested (`WhiteBalanceCalibrationTests`), same "pure service" pattern as `ColorEngine`. Gains can never go below 1.0 (an AVFoundation constraint) — a warm/cool cast is corrected by boosting the weak channel(s), not reducing others |
+| `CameraViewModel.calibrateWhiteBalance(using:)` / `.resetWhiteBalance()` | MainActor entry points; do the `AVCaptureDevice` locking on `sessionQueue`, same pattern as `refocus()`/`setTorch()`/`setZoom()`. Reset alongside torch/zoom in `stopSession()` so each session starts back on auto white balance |
+| `CameraView` (aiming flow) | Tapping the toolbar icon toggles `isCalibratingWhiteBalance`, which repurposes the existing tap-to-freeze gesture: a tap while aiming samples `identifiedColor.rgb` as the reference instead of freezing. Icon tint: white (off) → yellow (aiming) → accent color (calibrated). Tapping while calibrated resets to auto |
+
+A reference darker than ~15/255 average brightness is rejected (`WhiteBalanceCalibration.minReferenceBrightness`) — sensor noise dominates the real color at that brightness, so the correction would be noise, not signal.
+
 ### SwiftData
 Use `@Model` for `ColorSwatch` (history entries). The model context lives in the App entry point and is passed down via `.modelContainer(for:)`.
 
@@ -292,5 +307,6 @@ Currently: **Paid Apple Developer account** (upgraded 2026-05-27)
 | 2026-06-11 | Redesigned home screen; replaced camera tooltip with step-by-step coach marks (feature tour), then fixed several tour bugs (touch passthrough/camera freeze on save, DragGesture conflict while overlay visible, tooltip not showing on replay). Added hue isolation card + profile picker to home screen; tapping a swatch now shows its color name. Fixed pulsing ring animation. Removed black/white/gray from the hue isolation picker; bumped version to 1.2. Replaced app icon and welcome-screen logo with new brand image; added branded splash screen on cold launch; added light/dark logo variants and fixed dark-mode logo display; bumped build number to 2. |
 | 2026-07-07 | Replaced app icon and in-app logo with professional designer assets (new C-arc camera mark, light/white-bg + dark/navy-bg `AppLogoImage` variants); removed old placeholder logo files. |
 | 2026-07-08 | Defaulted Sample Region to ON for better accuracy on textured surfaces. Added splash screen color waves (light/dark `SplashWaveImage`) and fixed a dark-mode logo size mismatch. Added pinch-to-zoom to the camera view (`AVCaptureDevice.videoZoomFactor` driven directly, so sampling stays accurate at any zoom). Moved the flashlight toggle to top-right stacked under Settings, with History/Settings/Torch icons normalized to a fixed 20×20 frame. Implemented High Contrast Mode (low-light visibility filter) — see architecture section above; mutually exclusive with Hue Isolation, shares its display layer. Changed the menu screen's Eyedropper icon from `drop.fill` to `eyedropper.halffull` to match the camera screen. Verified the icon change by building and running on device via `devicectl`. |
+| 2026-09-28 | Replaced test device with an iPhone 18 Pro Max (iOS 27); updated Xcode to 27.0 for iOS 27 SDK/device support. Feature 1: fixed the profile picker cards (`HomeView.swift`) to show clinical CVD names (Deuteranopia/Protanopia/Tritanopia/Achromatopsia) instead of layman-only labels — Settings and the home row already had this right. Feature 3: implemented White Balance Calibration — see architecture section above. New `WhiteBalanceCalibration` service (unit tested), new toolbar control in `CameraView`/`CameraViewModel`, new Settings toggle, coach mark step. Verified on device. |
 
 > Update this table at the end of every working session.

@@ -15,7 +15,7 @@ enum WhiteBalanceCalibration {
     /// A reference darker than this (average of R/G/B, 0–255) is rejected — at low
     /// brightness, sensor noise dominates the actual color and the correction would be
     /// more noise than signal.
-    private static let minReferenceBrightness = 15.0
+    nonisolated private static let minReferenceBrightness = 15.0
 
     /// Computes corrected white balance gains from a reference sample.
     ///
@@ -27,7 +27,7 @@ enum WhiteBalanceCalibration {
     ///     (`AVCaptureDevice.maxWhiteBalanceGain`).
     /// - Returns: gains clamped to `[1, maxGain]`, or `nil` if the reference is too dark
     ///   to trust.
-    static func correctedGains(
+    nonisolated static func correctedGains(
         measuredR: Double, measuredG: Double, measuredB: Double,
         currentGains: Gains,
         maxGain: Double

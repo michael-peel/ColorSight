@@ -10,31 +10,36 @@ final class WhiteBalanceCalibrationTests: XCTestCase {
             measuredR: 180, measuredG: 180, measuredB: 180,
             currentGains: neutralGains, maxGain: 4.0
         )
-        XCTAssertEqual(gains?.red,   1.0, accuracy: 0.001)
-        XCTAssertEqual(gains?.green, 1.0, accuracy: 0.001)
-        XCTAssertEqual(gains?.blue,  1.0, accuracy: 0.001)
+        XCTAssertNotNil(gains)
+        XCTAssertEqual(gains!.red,   1.0, accuracy: 0.001)
+        XCTAssertEqual(gains!.green, 1.0, accuracy: 0.001)
+        XCTAssertEqual(gains!.blue,  1.0, accuracy: 0.001)
     }
 
     func testWarmCastBoostsBlueGain() {
         // A "white" surface reading warm (too much red, not enough blue) should get a
-        // corrective boost to blue gain and a reduction to red gain.
+        // corrective boost to blue gain. Gains can never go below 1.0 (Apple's API
+        // floor), so starting from neutral (1,1,1) gains, red just clamps at 1.0
+        // rather than actually decreasing — the correction is entirely a blue boost.
         let gains = WhiteBalanceCalibration.correctedGains(
             measuredR: 220, measuredG: 180, measuredB: 120,
             currentGains: neutralGains, maxGain: 4.0
         )
         XCTAssertNotNil(gains)
-        XCTAssertLessThan(gains!.red, 1.0)
+        XCTAssertEqual(gains!.red, 1.0, accuracy: 0.001)
         XCTAssertGreaterThan(gains!.blue, 1.0)
     }
 
     func testCoolCastBoostsRedGain() {
+        // Same floor-at-1.0 reasoning as the warm-cast case above, mirrored: blue
+        // clamps at 1.0, red gets the corrective boost.
         let gains = WhiteBalanceCalibration.correctedGains(
             measuredR: 120, measuredG: 180, measuredB: 220,
             currentGains: neutralGains, maxGain: 4.0
         )
         XCTAssertNotNil(gains)
         XCTAssertGreaterThan(gains!.red, 1.0)
-        XCTAssertLessThan(gains!.blue, 1.0)
+        XCTAssertEqual(gains!.blue, 1.0, accuracy: 0.001)
     }
 
     func testGainsClampToMaxGain() {
@@ -63,9 +68,10 @@ final class WhiteBalanceCalibrationTests: XCTestCase {
         )
         // A neutral sample under the CURRENT gains needs no further correction —
         // output should equal the input gains unchanged.
-        XCTAssertEqual(gains?.red,   1.5, accuracy: 0.001)
-        XCTAssertEqual(gains?.green, 1.0, accuracy: 0.001)
-        XCTAssertEqual(gains?.blue,  1.2, accuracy: 0.001)
+        XCTAssertNotNil(gains)
+        XCTAssertEqual(gains!.red,   1.5, accuracy: 0.001)
+        XCTAssertEqual(gains!.green, 1.0, accuracy: 0.001)
+        XCTAssertEqual(gains!.blue,  1.2, accuracy: 0.001)
     }
 
     func testTooDarkSampleReturnsNil() {
