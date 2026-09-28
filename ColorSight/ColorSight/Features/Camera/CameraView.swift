@@ -373,7 +373,11 @@ struct CameraView: View {
 
             // MARK: - First-launch tooltip overlay (above everything)
             if showingTooltip {
-                CameraTooltipOverlay(buttonFrames: buttonFrames, onDismiss: dismissTooltip)
+                CameraTooltipOverlay(
+                    buttonFrames: buttonFrames,
+                    onDismiss: dismissTooltip,
+                    showsWhiteBalanceStep: whiteBalanceCalibrationEnabled
+                )
                     .transition(.opacity)
             }
         }
