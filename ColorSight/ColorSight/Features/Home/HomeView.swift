@@ -278,10 +278,10 @@ private extension CVDProfile {
     var onboardingTitle: String {
         switch self {
         case .normal:        return "No Color Deficiency"
-        case .deuteranopia:  return "Red-Green (Green-type)"
-        case .protanopia:    return "Red-Green (Red-type)"
-        case .tritanopia:    return "Blue-Yellow"
-        case .achromatopsia: return "Full Color Blindness"
+        case .deuteranopia:  return "Deuteranopia"
+        case .protanopia:    return "Protanopia"
+        case .tritanopia:    return "Tritanopia"
+        case .achromatopsia: return "Achromatopsia"
         }
     }
 
